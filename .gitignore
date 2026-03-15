@@ -1,0 +1,15 @@
+# uv
+.venv/
+
+# 데이터셋 / 체크포인트
+dataset/
+checkpoints/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+
+# 환경변수
+.env
