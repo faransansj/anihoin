@@ -1,213 +1,150 @@
-# AniHoin — Hololive Image Crawler
+# HoloScope — Hololive Character Classifier
 
-Danbooru에서 홀로라이브 캐릭터 이미지를 수집하는 CLI 툴입니다.  
-YOLO 학습을 위한 데이터셋 구성에 사용됩니다.
-
----
+Swin Transformer-Tiny 기반 홀로라이브 캐릭터 분류기
 
 ## 구조
 
 ```
-anihoin/
+holo-classifier/
 ├── crawler/
-│   ├── __init__.py
-│   ├── hololive_tags.py      # 캐릭터 태그 정의 (JP/EN/ID 전 세대)
-│   ├── danbooru_client.py    # Danbooru API 클라이언트
-│   └── cli.py                # CLI 인터페이스
-├── main.py                   # 엔트리포인트
-├── requirements.txt
-├── .env.example              # API 키 설정 예시
-└── data/                     # 다운로드된 이미지 저장 위치
-    ├── tokino_sora/
-    ├── usada_pekora/
-    └── ...
+│   └── danbooru_crawler.py   # danbooru SFW 이미지 크롤러
+├── train/
+│   ├── dataset.py            # Dataset / Augmentation / DataLoader
+│   └── train.py              # 2-phase fine-tuning 학습 스크립트
+├── api/
+│   └── main.py               # FastAPI 추론 서버
+├── demo/
+│   └── index.html            # 데모 페이지
+└── requirements.txt
 ```
 
----
+## 실행 순서
 
-## 설치
-
-### 요구사항
-
-- Python 3.10+
-
-### 의존성 설치
-
+### 0. 환경 설정
 ```bash
-pip install -r requirements.txt
+# uv 설치 (없는 경우)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 가상환경 생성 및 의존성 설치 (Python 3.11 자동 사용)
+uv sync
+
+# wandb 로깅까지 설치하는 경우
+uv sync --extra logging
 ```
 
----
+### 1. 크롤링
 
-## Danbooru API 키 설정 (선택, 권장)
+#### 자격증명 설정 (권장)
 
-인증 없이도 사용할 수 있지만, 익명 사용 시 다음 제한이 있습니다:
-
-| 항목 | 익명 | 인증 (Gold+) |
-|------|------|------------|
-| 요청 태그 수 | 최대 2개 | 최대 6개 |
-| 페이지당 이미지 | 20개 | 200개 |
-| 요청 딜레이 | 2초 | 1초 |
-
-### API 키 발급
-
-1. [Danbooru](https://danbooru.donmai.us) 에 로그인
-2. 우측 상단 프로필 → **My Account** → **API Key** 섹션에서 생성
-3. 프로젝트 루트에 `.env` 파일 생성:
+익명으로도 실행되지만, Danbooru 계정이 있으면 rate limit이 완화됩니다.
 
 ```bash
 cp .env.example .env
+# .env 파일을 열어 DANBOORU_LOGIN, DANBOORU_API_KEY 입력
+# API 키는 https://danbooru.donmai.us/profile 에서 발급
 ```
 
-`.env` 파일을 열어 본인 정보로 수정:
-
-```ini
-DANBOORU_LOGIN=your_username
-DANBOORU_API_KEY=your_api_key
-```
-
----
-
-## 사용법
-
-### 기본 실행 — 인터랙티브 모드
+#### 실행
 
 ```bash
-python main.py
+# 기본 실행 (.env 자동 로드)
+uv run python danbooru_crawler.py
+
+# 직접 자격증명 전달
+uv run python danbooru_crawler.py -u YOUR_NAME -k YOUR_KEY
+
+# 주요 옵션
+uv run python danbooru_crawler.py \
+  --min-images 300 \
+  --max-images 2000 \
+  --workers 8 \
+  --output-dir ./dataset/raw
 ```
 
-1. Danbooru에서 전 캐릭터 이미지 수를 조회합니다
-2. Rich 테이블로 캐릭터별 이미지 수를 확인합니다
-3. 체크박스로 원하는 캐릭터를 선택합니다
-4. 각 캐릭터당 다운로드 수량을 입력합니다
-5. 확인 후 다운로드를 진행합니다
+| 옵션 | 기본값 | 설명 |
+|------|--------|------|
+| `-u`, `--username` | `""` | Danbooru 사용자명 |
+| `-k`, `--api-key` | `""` | Danbooru API 키 |
+| `--min-images` | `500` | 미달 시 `others/`로 이동 |
+| `--max-images` | `1000` | 캐릭터당 상한 |
+| `--workers` | `4` | 병렬 다운로드 수 (최대 권장: 8) |
+| `--output-dir` | `./dataset/raw` | 저장 경로 |
 
----
+**결과 구조:**
+```
+dataset/raw/
+  houshou_marine/   ← min-images 이상 → 분류 대상
+  usada_pekora/
+  ...
+  others/           ← min-images 미만 캐릭터 자동 이동
+    himemori_luna/
+    ...
+```
 
-### CLI 옵션
+### 2. 학습
+```bash
+uv run python train.py \
+  --data-dir ./dataset/raw \
+  --save-dir ./checkpoints \
+  --batch-size 32 \
+  --phase1-epochs 5 \
+  --phase2-epochs 30 \
+  --phase2-lr 1e-5
+```
 
-| 옵션 | 단축키 | 기본값 | 설명 |
-|------|--------|--------|------|
-| `--list` | `-l` | — | 이미지 수만 조회하고 종료 |
-| `--download TAG` | `-d TAG` | — | 특정 캐릭터 태그 다운로드 (반복 사용 가능) |
-| `--all` | `-a` | — | 활동 중인 모든 캐릭터 다운로드 |
-| `--limit N` | `-n N` | `200` | 캐릭터당 최대 이미지 수 |
-| `--rating RATING` | `-r RATING` | `general` | 등급 필터 (`general` / `safe` / `questionable` / `any`) |
-| `--output DIR` | `-o DIR` | `./data` | 저장 디렉토리 |
-| `--no-cache` | — | — | 캐시 무시, 이미지 수 재조회 |
-| `--include-retired` | — | — | 졸업/은퇴 멤버 포함 |
-| `--min-count N` | — | `0` | N개 미만 캐릭터는 목록에서 숨김 |
-| `--verbose` | `-v` | — | 상세 디버그 로그 출력 |
+**Phase 1** (5 epoch): classification head만 학습  
+**Phase 2** (30 epoch): 전체 fine-tune, lr=1e-5
 
----
+학습 완료 후 `checkpoints/` 에 저장:
+- `best_model.pth` — 최고 val_acc 모델
+- `class_map.json` — idx → 캐릭터명 매핑
+- `config.json`    — 학습 설정 및 최종 성능
 
-### 사용 예시
+### 3. API 서버 실행
+```bash
+uv run python main.py
+# http://localhost:8000 에서 서버 시작
+# http://localhost:8000/docs 에서 Swagger UI 확인
+```
+
+### 4. API 사용 예시
 
 ```bash
-# 캐릭터 목록 및 이미지 수 확인
-python main.py --list
-
-# 이미지가 1000개 이상인 캐릭터만 표시
-python main.py --list --min-count 1000
-
-# 특정 캐릭터 2명, 각 300장 다운로드
-python main.py --download tokino_sora --download usada_pekora --limit 300
-
-# 전체 캐릭터 200장씩, safe 등급 이미지 다운로드
-python main.py --all --limit 200 --rating safe
-
-# 저장 경로 지정
-python main.py --all --limit 500 --output ./dataset/hololive
-
-# 졸업 멤버 포함, 캐시 재조회
-python main.py --list --include-retired --no-cache
+# 이미지 분류
+curl -X POST "http://localhost:8000/predict" \
+  -H "accept: application/json" \
+  -F "file=@marine.jpg"
 ```
 
----
-
-## 출력 디렉토리 구조
-
-다운로드된 이미지는 **캐릭터 태그** 이름의 폴더에 저장됩니다.  
-파일명은 Danbooru 포스트 ID를 사용합니다.
-
-```
-data/
-├── tokino_sora/
-│   ├── 1234567.jpg
-│   ├── 2345678.png
-│   └── ...
-├── usada_pekora/
-│   ├── 3456789.jpg
-│   └── ...
-└── others/          # (직접 추가, YOLO 학습용 기타 클래스)
+**Response:**
+```json
+{
+  "predicted_character": "houshou_marine",
+  "display_name": "Houshou Marine (宝鐘マリン)",
+  "confidence": 0.923,
+  "is_hololive": true,
+  "top5": [
+    {"character": "houshou_marine", "display_name": "Houshou Marine (宝鐘マリン)", "confidence": 0.923},
+    {"character": "shiranui_flare", "display_name": "Shiranui Flare (不知火フレア)", "confidence": 0.041},
+    {"character": "shirogane_noel", "display_name": "Shirogane Noel (白銀ノエル)", "confidence": 0.018},
+    {"character": "others",         "display_name": "Others (홀로라이브 외)",        "confidence": 0.012},
+    {"character": "usada_pekora",   "display_name": "Usada Pekora (兎田ぺこら)",     "confidence": 0.006}
+  ]
+}
 ```
 
-### 이미지 수 캐시
+## 모델 선택 근거
 
-처음 실행 시 Danbooru에서 이미지 수를 조회한 결과가 `character_counts.json`에 캐시됩니다.  
-이후 실행에서는 캐시를 사용해 빠르게 목록을 표시합니다.  
-최신 수치를 보려면 `--no-cache` 플래그를 사용하세요.
-
----
-
-## 지원 캐릭터
-
-현재 지원하는 홀로라이브 멤버:
-
-| 브랜치 | 세대 |
-|--------|------|
-| **JP** | Gen 0, Gen 1, Gen 2, GAMERS, Gen 3, Gen 4, Gen 5, Gen 6 |
-| **DEV_IS** | ReGLOSS, FLOW GLOW |
-| **EN** | Myth, Project: HOPE, Council, Advent, Justice |
-| **ID** | Gen 1, Gen 2, Gen 3 |
-
-졸업/은퇴 멤버는 기본적으로 제외됩니다. `--include-retired`로 포함할 수 있습니다.
-
----
-
-## YOLO 데이터셋 구성 예시
-
-수집된 이미지를 YOLO 학습 데이터로 변환하는 기본 흐름:
-
-```
-dataset/
-├── images/
-│   ├── train/
-│   └── val/
-├── labels/
-│   ├── train/
-│   └── val/
-└── data.yaml
-```
-
-`data.yaml` 예시:
-
-```yaml
-path: ./dataset
-train: images/train
-val: images/val
-
-nc: 70  # 캐릭터 수 + others
-names:
-  - tokino_sora
-  - usada_pekora
-  # ... 기타 캐릭터 태그 순서대로
-  - others
-```
-
-> **Note:** 이미지 수집 후 바운딩박스 어노테이션이 필요합니다.  
-> Danbooru에서 받은 이미지는 캐릭터가 중심에 있는 일러스트가 많아 자동 crop이 가능합니다.
-
----
+| 항목 | 내용 |
+|------|------|
+| 모델 | Swin Transformer-Tiny |
+| 입력 | 224×224 RGB |
+| 사전학습 | ImageNet-1K |
+| 파라미터 | ~28M |
+| 적합 이유 | ViT 계열 중 데이터 효율 ↑, CNN보다 전역 특징 포착 ↑ |
 
 ## 주의사항
 
-- Danbooru의 이용 약관을 준수하세요. 과도한 요청은 IP 차단 원인이 됩니다.
-- 수집된 이미지의 저작권은 각 작가에게 있습니다. **모델 학습 목적**으로만 사용하세요.
-- 기본 등급 필터는 `general`(전체이용가)입니다. `questionable` 이상은 명시적으로 설정해야 합니다.
-
----
-
-## 라이선스
-
-MIT License
+- 학술/비상업 목적 데모
+- 홀로라이브 캐릭터 © Cover Corp.
+- danbooru 크롤링 시 이용약관 준수
