@@ -27,7 +27,7 @@ from pydantic import BaseModel
 # 설정
 # ──────────────────────────────────────────────
 
-CHECKPOINT_DIR = Path("../checkpoints")
+CHECKPOINT_DIR = Path("./checkpoints")
 MODEL_PATH     = CHECKPOINT_DIR / "best_model.pth"
 CLASS_MAP_PATH = CHECKPOINT_DIR / "class_map.json"
 CONFIG_PATH    = CHECKPOINT_DIR / "config.json"
@@ -115,7 +115,7 @@ class ModelLoader:
             num_classes=num_classes,
         )
         self.model.load_state_dict(
-            torch.load(MODEL_PATH, map_location=self.device)
+            torch.load(MODEL_PATH, map_location=self.device, weights_only=True)
         )
         self.model.to(self.device).eval()
 
@@ -134,7 +134,7 @@ class ModelLoader:
         img_np = np.array(img.convert("RGB"))
         tensor = self.transform(image=img_np)["image"].unsqueeze(0).to(self.device)
 
-        with torch.cuda.amp.autocast():
+        with torch.amp.autocast(device_type=self.device.type, enabled=(self.device.type == "cuda")):
             logits = self.model(tensor)
 
         probs = torch.softmax(logits, dim=1)[0].cpu().numpy()
@@ -170,6 +170,7 @@ app = FastAPI(
     title="Hololive Character Classifier",
     description="홀로라이브 캐릭터 분류 API (Swin Transformer-Tiny)",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -188,9 +189,12 @@ class PredictResponse(BaseModel):
     top5: list[dict]
 
 
-@app.on_event("startup")
-async def startup():
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app):
     ModelLoader.get()  # 앱 시작 시 모델 로드
+    yield
 
 
 @app.get("/health")
@@ -231,7 +235,7 @@ async def predict(file: UploadFile = File(...)):
 
 
 # 데모 페이지 서빙
-app.mount("/", StaticFiles(directory="../demo", html=True), name="demo")
+app.mount("/", StaticFiles(directory="./demo", html=True), name="demo")
 
 
 if __name__ == "__main__":
