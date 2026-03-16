@@ -5,17 +5,14 @@ Swin Transformer-Tiny 기반 홀로라이브 캐릭터 분류기
 ## 구조
 
 ```
-holo-classifier/
-├── crawler/
-│   └── danbooru_crawler.py   # danbooru SFW 이미지 크롤러
-├── train/
-│   ├── dataset.py            # Dataset / Augmentation / DataLoader
-│   └── train.py              # 2-phase fine-tuning 학습 스크립트
-├── api/
-│   └── main.py               # FastAPI 추론 서버
+anihoin/
+├── danbooru_crawler.py   # danbooru SFW 이미지 크롤러
+├── dataset.py            # Dataset / Augmentation / DataLoader
+├── train.py              # 2-phase fine-tuning 학습 스크립트
+├── main.py               # FastAPI 추론 서버
 ├── demo/
-│   └── index.html            # 데모 페이지
-└── requirements.txt
+│   └── index.html        # 데모 페이지
+└── pyproject.toml
 ```
 
 ## 실행 순서
@@ -89,11 +86,21 @@ uv run python train.py \
   --batch-size 32 \
   --phase1-epochs 5 \
   --phase2-epochs 30 \
-  --phase2-lr 1e-5
+  --phase2-lr 1e-5 \
+  --patience 7
 ```
 
-**Phase 1** (5 epoch): classification head만 학습  
-**Phase 2** (30 epoch): 전체 fine-tune, lr=1e-5
+| 옵션 | 기본값 | 설명 |
+|------|--------|------|
+| `--phase1-epochs` | `5` | Head-only 학습 epoch 수 |
+| `--phase2-epochs` | `30` | Full fine-tune epoch 수 |
+| `--phase2-lr` | `1e-5` | Phase 2 학습률 |
+| `--patience` | `7` | Early stopping patience (0=비활성화) |
+| `--wandb` | `false` | WandB 로깅 활성화 |
+| `--wandb-project` | `holoscope` | WandB 프로젝트명 |
+
+**Phase 1** (5 epoch): classification head만 학습
+**Phase 2** (30 epoch): 전체 fine-tune, lr=1e-5, early stopping 적용
 
 학습 완료 후 `checkpoints/` 에 저장:
 - `best_model.pth` — 최고 val_acc 모델
@@ -119,19 +126,34 @@ curl -X POST "http://localhost:8000/predict" \
 **Response:**
 ```json
 {
-  "predicted_character": "houshou_marine",
-  "display_name": "Houshou Marine (宝鐘マリン)",
+  "file_name": "marine.jpg",
   "confidence": 0.923,
-  "is_hololive": true,
-  "top5": [
-    {"character": "houshou_marine", "display_name": "Houshou Marine (宝鐘マリン)", "confidence": 0.923},
-    {"character": "shiranui_flare", "display_name": "Shiranui Flare (不知火フレア)", "confidence": 0.041},
-    {"character": "shirogane_noel", "display_name": "Shirogane Noel (白銀ノエル)", "confidence": 0.018},
-    {"character": "others",         "display_name": "Others (홀로라이브 외)",        "confidence": 0.012},
-    {"character": "usada_pekora",   "display_name": "Usada Pekora (兎田ぺこら)",     "confidence": 0.006}
-  ]
+  "meta": {
+    "char_name": "Houshou Marine (宝鐘マリン)",
+    "cardinal": 19,
+    "affiliation": "JP"
+  }
 }
 ```
+
+**필드 설명:**
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `file_name` | string | 업로드된 파일명 |
+| `confidence` | float | top-1 예측 신뢰도 (0.0 ~ 1.0) |
+| `meta.char_name` | string | 캐릭터 표시명 |
+| `meta.cardinal` | int | 해당 지부 내 데뷔 순번 |
+| `meta.affiliation` | `JP` \| `EN` \| `IND` \| `null` | 소속 지부 |
+
+**엔드포인트 목록:**
+
+| Method | Path | 설명 |
+|--------|------|------|
+| `POST` | `/predict` | 이미지 분류 |
+| `GET` | `/classes` | 지원 캐릭터 전체 목록 |
+| `GET` | `/health` | 서버 상태 및 디바이스 확인 |
+| `GET` | `/docs` | Swagger UI |
 
 ## 모델 선택 근거
 
