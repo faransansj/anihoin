@@ -28,7 +28,7 @@ def get_train_transforms(img_size: int = 224):
     - 기하학적 변환 위주
     """
     return A.Compose([
-        A.RandomResizedCrop(img_size, img_size, scale=(0.7, 1.0)),
+        A.RandomResizedCrop(size=(img_size, img_size), scale=(0.7, 1.0)),
         A.HorizontalFlip(p=0.5),
         A.Rotate(limit=15, p=0.3),
         A.OneOf([
@@ -44,9 +44,10 @@ def get_train_transforms(img_size: int = 224):
         ),
         A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.4),
         A.CoarseDropout(
-            max_holes=8, max_height=32, max_width=32,
-            min_holes=1, min_height=16, min_width=16,
-            fill_value=0, p=0.3
+            num_holes_range=(1, 8),
+            hole_height_range=(16, 32),
+            hole_width_range=(16, 32),
+            fill=0, p=0.3
         ),
         A.Normalize(mean=[0.485, 0.456, 0.406],
                     std=[0.229, 0.224, 0.225]),
