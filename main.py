@@ -7,6 +7,8 @@ GET  /health   → 헬스 체크
 
 import io
 import json
+from contextlib import asynccontextmanager
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
@@ -20,7 +22,6 @@ from albumentations.pytorch import ToTensorV2
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 # ──────────────────────────────────────────────
@@ -30,55 +31,84 @@ from pydantic import BaseModel
 CHECKPOINT_DIR = Path("./checkpoints")
 MODEL_PATH     = CHECKPOINT_DIR / "best_model.pth"
 CLASS_MAP_PATH = CHECKPOINT_DIR / "class_map.json"
-CONFIG_PATH    = CHECKPOINT_DIR / "config.json"
 IMG_SIZE       = 224
 TOP_K          = 5
 
-# 캐릭터 표시 이름 (폴더명 → 출력용)
-DISPLAY_NAMES = {
-    "tokino_sora":        "Tokino Sora (ときのそら)",
-    "roboco":             "Roboco-san (ロボ子さん)",
-    "sakura_miko":        "Sakura Miko (さくらみこ)",
-    "hoshimachi_suisei":  "Hoshimachi Suisei (星街すいせい)",
-    "azki":               "AZKi",
-    "yozora_mel":         "Yozora Mel (夜空メル)",
-    "shirakami_fubuki":   "Shirakami Fubuki (白上フブキ)",
-    "natsuiro_matsuri":   "Natsuiro Matsuri (夏色まつり)",
-    "aki_rosenthal":      "Aki Rosenthal (アキ・ローゼンタール)",
-    "akai_haato":         "Akai Haato (赤井はあと)",
-    "minato_aqua":        "Minato Aqua (湊あくあ)",
-    "murasaki_shion":     "Murasaki Shion (紫咲シオン)",
-    "nakiri_ayame":       "Nakiri Ayame (百鬼あやめ)",
-    "yuzuki_choco":       "Yuzuki Choco (癒月ちょこ)",
-    "oozora_subaru":      "Oozora Subaru (大空スバル)",
-    "usada_pekora":       "Usada Pekora (兎田ぺこら)",
-    "shiranui_flare":     "Shiranui Flare (不知火フレア)",
-    "shirogane_noel":     "Shirogane Noel (白銀ノエル)",
-    "houshou_marine":     "Houshou Marine (宝鐘マリン)",
-    "amane_kanata":       "Amane Kanata (天音かなた)",
-    "tsunomaki_watame":   "Tsunomaki Watame (角巻わため)",
-    "tokoyami_towa":      "Tokoyami Towa (常闇トワ)",
-    "himemori_luna":      "Himemori Luna (姫森ルーナ)",
-    "yukihana_lamy":      "Yukihana Lamy (雪花ラミィ)",
-    "momosuzu_nene":      "Momosuzu Nene (桃鈴ねね)",
-    "shishiro_botan":     "Shishiro Botan (獅白ぼたん)",
-    "omaru_polka":        "Omaru Polka (尾丸ポルカ)",
-    "laplus_darknesss":   "La+ Darknesss (ラプラス・ダークネス)",
-    "takane_lui":         "Takane Lui (鷹嶺ルイ)",
-    "hakui_koyori":       "Hakui Koyori (博衣こより)",
-    "sakamata_chloe":     "Sakamata Chloe (沙花叉クロヱ)",
-    "kazama_iroha":       "Kazama Iroha (風真いろは)",
-    "mori_calliope":      "Mori Calliope",
-    "takanashi_kiara":    "Takanashi Kiara",
-    "ninomae_inanis":     "Ninomae Ina'nis",
-    "gawr_gura":          "Gawr Gura",
-    "watson_amelia":      "Watson Amelia",
-    "ceres_fauna":        "Ceres Fauna",
-    "ouro_kronii":        "Ouro Kronii",
-    "nanashi_mumei":      "Nanashi Mumei",
-    "hakos_baelz":        "Hakos Baelz",
-    "others":             "Others (홀로라이브 외)",
+
+# ──────────────────────────────────────────────
+# 캐릭터 메타데이터
+# cardinal: 해당 지부(branch) 내 데뷔 순번 (1-indexed)
+# ──────────────────────────────────────────────
+
+class Affiliation(str, Enum):
+    JP  = "JP"
+    EN  = "EN"
+    IND = "IND"
+
+
+CHARACTER_META: dict[str, dict] = {
+    # ── JP ──────────────────────────────────────
+    "tokino_sora":        {"char_name": "Tokino Sora (ときのそら)",               "cardinal": 1,  "affiliation": Affiliation.JP},
+    "roboco":             {"char_name": "Roboco-san (ロボ子さん)",                "cardinal": 2,  "affiliation": Affiliation.JP},
+    "sakura_miko":        {"char_name": "Sakura Miko (さくらみこ)",               "cardinal": 3,  "affiliation": Affiliation.JP},
+    "hoshimachi_suisei":  {"char_name": "Hoshimachi Suisei (星街すいせい)",       "cardinal": 4,  "affiliation": Affiliation.JP},
+    "azki":               {"char_name": "AZKi",                                   "cardinal": 5,  "affiliation": Affiliation.JP},
+    "yozora_mel":         {"char_name": "Yozora Mel (夜空メル)",                  "cardinal": 6,  "affiliation": Affiliation.JP},
+    "shirakami_fubuki":   {"char_name": "Shirakami Fubuki (白上フブキ)",          "cardinal": 7,  "affiliation": Affiliation.JP},
+    "natsuiro_matsuri":   {"char_name": "Natsuiro Matsuri (夏色まつり)",          "cardinal": 8,  "affiliation": Affiliation.JP},
+    "aki_rosenthal":      {"char_name": "Aki Rosenthal (アキ・ローゼンタール)",   "cardinal": 9,  "affiliation": Affiliation.JP},
+    "akai_haato":         {"char_name": "Akai Haato (赤井はあと)",                "cardinal": 10, "affiliation": Affiliation.JP},
+    "minato_aqua":        {"char_name": "Minato Aqua (湊あくあ)",                 "cardinal": 11, "affiliation": Affiliation.JP},
+    "murasaki_shion":     {"char_name": "Murasaki Shion (紫咲シオン)",            "cardinal": 12, "affiliation": Affiliation.JP},
+    "nakiri_ayame":       {"char_name": "Nakiri Ayame (百鬼あやめ)",              "cardinal": 13, "affiliation": Affiliation.JP},
+    "yuzuki_choco":       {"char_name": "Yuzuki Choco (癒月ちょこ)",              "cardinal": 14, "affiliation": Affiliation.JP},
+    "oozora_subaru":      {"char_name": "Oozora Subaru (大空スバル)",             "cardinal": 15, "affiliation": Affiliation.JP},
+    "usada_pekora":       {"char_name": "Usada Pekora (兎田ぺこら)",              "cardinal": 16, "affiliation": Affiliation.JP},
+    "shiranui_flare":     {"char_name": "Shiranui Flare (不知火フレア)",          "cardinal": 17, "affiliation": Affiliation.JP},
+    "shirogane_noel":     {"char_name": "Shirogane Noel (白銀ノエル)",            "cardinal": 18, "affiliation": Affiliation.JP},
+    "houshou_marine":     {"char_name": "Houshou Marine (宝鐘マリン)",            "cardinal": 19, "affiliation": Affiliation.JP},
+    "amane_kanata":       {"char_name": "Amane Kanata (天音かなた)",              "cardinal": 20, "affiliation": Affiliation.JP},
+    "tsunomaki_watame":   {"char_name": "Tsunomaki Watame (角巻わため)",          "cardinal": 21, "affiliation": Affiliation.JP},
+    "tokoyami_towa":      {"char_name": "Tokoyami Towa (常闇トワ)",              "cardinal": 22, "affiliation": Affiliation.JP},
+    "himemori_luna":      {"char_name": "Himemori Luna (姫森ルーナ)",             "cardinal": 23, "affiliation": Affiliation.JP},
+    "yukihana_lamy":      {"char_name": "Yukihana Lamy (雪花ラミィ)",             "cardinal": 24, "affiliation": Affiliation.JP},
+    "momosuzu_nene":      {"char_name": "Momosuzu Nene (桃鈴ねね)",              "cardinal": 25, "affiliation": Affiliation.JP},
+    "shishiro_botan":     {"char_name": "Shishiro Botan (獅白ぼたん)",            "cardinal": 26, "affiliation": Affiliation.JP},
+    "omaru_polka":        {"char_name": "Omaru Polka (尾丸ポルカ)",               "cardinal": 27, "affiliation": Affiliation.JP},
+    "laplus_darknesss":   {"char_name": "La+ Darknesss (ラプラス・ダークネス)",   "cardinal": 28, "affiliation": Affiliation.JP},
+    "takane_lui":         {"char_name": "Takane Lui (鷹嶺ルイ)",                  "cardinal": 29, "affiliation": Affiliation.JP},
+    "hakui_koyori":       {"char_name": "Hakui Koyori (博衣こより)",              "cardinal": 30, "affiliation": Affiliation.JP},
+    "sakamata_chloe":     {"char_name": "Sakamata Chloe (沙花叉クロヱ)",         "cardinal": 31, "affiliation": Affiliation.JP},
+    "kazama_iroha":       {"char_name": "Kazama Iroha (風真いろは)",              "cardinal": 32, "affiliation": Affiliation.JP},
+    # ── EN ──────────────────────────────────────
+    "mori_calliope":      {"char_name": "Mori Calliope",                          "cardinal": 1,  "affiliation": Affiliation.EN},
+    "takanashi_kiara":    {"char_name": "Takanashi Kiara",                        "cardinal": 2,  "affiliation": Affiliation.EN},
+    "ninomae_inanis":     {"char_name": "Ninomae Ina'nis",                        "cardinal": 3,  "affiliation": Affiliation.EN},
+    "gawr_gura":          {"char_name": "Gawr Gura",                              "cardinal": 4,  "affiliation": Affiliation.EN},
+    "watson_amelia":      {"char_name": "Watson Amelia",                          "cardinal": 5,  "affiliation": Affiliation.EN},
+    "ceres_fauna":        {"char_name": "Ceres Fauna",                            "cardinal": 6,  "affiliation": Affiliation.EN},
+    "ouro_kronii":        {"char_name": "Ouro Kronii",                            "cardinal": 7,  "affiliation": Affiliation.EN},
+    "nanashi_mumei":      {"char_name": "Nanashi Mumei",                          "cardinal": 8,  "affiliation": Affiliation.EN},
+    "hakos_baelz":        {"char_name": "Hakos Baelz",                            "cardinal": 9,  "affiliation": Affiliation.EN},
+    # ── others ──────────────────────────────────
+    "others":             {"char_name": "Others",                                  "cardinal": 0,  "affiliation": None},
 }
+
+
+# ──────────────────────────────────────────────
+# Pydantic 스키마
+# ──────────────────────────────────────────────
+
+class CharMeta(BaseModel):
+    char_name: str
+    cardinal: int
+    affiliation: Optional[Affiliation]
+
+
+class PredictResponse(BaseModel):
+    file_name: str
+    confidence: float
+    meta: CharMeta
 
 
 # ──────────────────────────────────────────────
@@ -102,13 +132,11 @@ class ModelLoader:
         return cls._instance
 
     def _load(self):
-        # 클래스 맵 로드
         with open(CLASS_MAP_PATH, encoding="utf-8") as f:
             raw = json.load(f)
         self.idx_to_class = {int(k): v for k, v in raw.items()}
         num_classes = len(self.idx_to_class)
 
-        # 모델 로드
         self.model = timm.create_model(
             "swin_tiny_patch4_window7_224",
             pretrained=False,
@@ -119,7 +147,6 @@ class ModelLoader:
         )
         self.model.to(self.device).eval()
 
-        # 추론용 transform
         self.transform = A.Compose([
             A.Resize(IMG_SIZE, IMG_SIZE),
             A.Normalize(mean=[0.485, 0.456, 0.406],
@@ -130,7 +157,8 @@ class ModelLoader:
         print(f"모델 로드 완료: {num_classes}개 클래스, device={self.device}")
 
     @torch.no_grad()
-    def predict(self, img: Image.Image) -> dict:
+    def predict(self, img: Image.Image) -> tuple[str, float]:
+        """(class_key, confidence) 반환"""
         img_np = np.array(img.convert("RGB"))
         tensor = self.transform(image=img_np)["image"].unsqueeze(0).to(self.device)
 
@@ -138,38 +166,24 @@ class ModelLoader:
             logits = self.model(tensor)
 
         probs = torch.softmax(logits, dim=1)[0].cpu().numpy()
-        top_k_idx = probs.argsort()[::-1][:TOP_K]
-
-        predicted_idx = int(top_k_idx[0])
-        predicted_char = self.idx_to_class[predicted_idx]
-        confidence = float(probs[predicted_idx])
-
-        top5 = [
-            {
-                "character": self.idx_to_class[int(i)],
-                "display_name": DISPLAY_NAMES.get(self.idx_to_class[int(i)], self.idx_to_class[int(i)]),
-                "confidence": float(probs[i]),
-            }
-            for i in top_k_idx
-        ]
-
-        return {
-            "predicted_character": predicted_char,
-            "display_name": DISPLAY_NAMES.get(predicted_char, predicted_char),
-            "confidence": confidence,
-            "is_hololive": predicted_char != "others",
-            "top5": top5,
-        }
+        top_idx = int(probs.argmax())
+        return self.idx_to_class[top_idx], float(probs[top_idx])
 
 
 # ──────────────────────────────────────────────
 # FastAPI 앱
 # ──────────────────────────────────────────────
 
+@asynccontextmanager
+async def lifespan(app):
+    ModelLoader.get()
+    yield
+
+
 app = FastAPI(
     title="Hololive Character Classifier",
     description="홀로라이브 캐릭터 분류 API (Swin Transformer-Tiny)",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -179,22 +193,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-class PredictResponse(BaseModel):
-    predicted_character: str
-    display_name: str
-    confidence: float
-    is_hololive: bool
-    top5: list[dict]
-
-
-from contextlib import asynccontextmanager
-
-@asynccontextmanager
-async def lifespan(app):
-    ModelLoader.get()  # 앱 시작 시 모델 로드
-    yield
 
 
 @app.get("/health")
@@ -210,17 +208,16 @@ def get_classes():
         "classes": [
             {
                 "id": idx,
-                "character": char,
-                "display_name": DISPLAY_NAMES.get(char, char),
+                "character": char_key,
+                **CHARACTER_META.get(char_key, {"char_name": char_key, "cardinal": 0, "affiliation": None}),
             }
-            for idx, char in sorted(loader.idx_to_class.items())
+            for idx, char_key in sorted(loader.idx_to_class.items())
         ],
     }
 
 
 @app.post("/predict", response_model=PredictResponse)
 async def predict(file: UploadFile = File(...)):
-    # 파일 형식 체크
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="이미지 파일만 허용됩니다")
 
@@ -230,11 +227,19 @@ async def predict(file: UploadFile = File(...)):
     except Exception:
         raise HTTPException(status_code=400, detail="이미지 파일을 읽을 수 없습니다")
 
-    result = ModelLoader.get().predict(img)
-    return result
+    char_key, confidence = ModelLoader.get().predict(img)
+    meta_raw = CHARACTER_META.get(
+        char_key,
+        {"char_name": char_key, "cardinal": 0, "affiliation": None},
+    )
+
+    return PredictResponse(
+        file_name=file.filename or "",
+        confidence=confidence,
+        meta=CharMeta(**meta_raw),
+    )
 
 
-# 데모 페이지 서빙
 app.mount("/", StaticFiles(directory="./demo", html=True), name="demo")
 
 
