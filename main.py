@@ -12,12 +12,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-import torch
-import timm
 import numpy as np
 from PIL import Image
 import albumentations as A
-from albumentations.pytorch import ToTensorV2
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,11 +25,20 @@ from pydantic import BaseModel
 # 설정
 # ──────────────────────────────────────────────
 
-CHECKPOINT_DIR = Path("./checkpoints")
-MODEL_PATH     = CHECKPOINT_DIR / "best_model.pth"
-CLASS_MAP_PATH = CHECKPOINT_DIR / "class_map.json"
-IMG_SIZE       = 224
-TOP_K          = 5
+CHECKPOINT_DIR  = Path("./checkpoints")
+MODEL_PATH      = CHECKPOINT_DIR / "best_model.pth"
+ONNX_PATH       = CHECKPOINT_DIR / "best_model.onnx"
+CLASS_MAP_PATH  = CHECKPOINT_DIR / "class_map.json"
+IMG_SIZE        = 224
+TOP_K           = 5
+
+# ROCm EP 우선순위 (HSA_OVERRIDE_GFX_VERSION=11.0.0 환경변수 필요)
+_ORT_PROVIDERS = ["ROCMExecutionProvider", "MIGraphXExecutionProvider", "CPUExecutionProvider"]
+
+
+def _softmax(x: np.ndarray) -> np.ndarray:
+    e = np.exp(x - x.max())
+    return e / e.sum()
 
 
 # ──────────────────────────────────────────────
@@ -119,10 +125,12 @@ class ModelLoader:
     _instance = None
 
     def __init__(self):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = None
+        self.session = None          # onnxruntime.InferenceSession
+        self.torch_model = None      # PyTorch fallback
+        self.torch_device = None
         self.idx_to_class: dict[int, str] = {}
         self.transform = None
+        self.backend: str = ""
         self._load()
 
     @classmethod
@@ -137,35 +145,59 @@ class ModelLoader:
         self.idx_to_class = {int(k): v for k, v in raw.items()}
         num_classes = len(self.idx_to_class)
 
-        self.model = timm.create_model(
-            "swin_tiny_patch4_window7_224",
-            pretrained=False,
-            num_classes=num_classes,
-        )
-        self.model.load_state_dict(
-            torch.load(MODEL_PATH, map_location=self.device, weights_only=True)
-        )
-        self.model.to(self.device).eval()
+        if ONNX_PATH.exists():
+            self._load_onnx()
+        else:
+            print(f"ONNX 모델 없음 — PyTorch fallback 사용 ({ONNX_PATH})")
+            self._load_torch(num_classes)
 
+        # ToTensorV2 불필요 — numpy transpose로 대체
         self.transform = A.Compose([
             A.Resize(IMG_SIZE, IMG_SIZE),
             A.Normalize(mean=[0.485, 0.456, 0.406],
                         std=[0.229, 0.224, 0.225]),
-            ToTensorV2(),
         ])
 
-        print(f"모델 로드 완료: {num_classes}개 클래스, device={self.device}")
+        print(f"모델 로드 완료: {num_classes}개 클래스, backend={self.backend}")
 
-    @torch.no_grad()
+    def _load_onnx(self):
+        import onnxruntime as ort
+        available = ort.get_available_providers()
+        providers = [p for p in _ORT_PROVIDERS if p in available]
+        self.session = ort.InferenceSession(str(ONNX_PATH), providers=providers)
+        self.backend = f"onnx+{providers[0]}"
+        print(f"ORT providers: {providers}")
+
+    def _load_torch(self, num_classes: int):
+        import torch
+        import timm
+        self.torch_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = timm.create_model(
+            "swin_tiny_patch4_window7_224",
+            pretrained=False,
+            num_classes=num_classes,
+        )
+        model.load_state_dict(
+            torch.load(MODEL_PATH, map_location=self.torch_device, weights_only=True)
+        )
+        self.torch_model = model.to(self.torch_device).eval()
+        self.backend = f"torch+{self.torch_device}"
+
     def predict(self, img: Image.Image) -> tuple[str, float]:
         """(class_key, confidence) 반환"""
         img_np = np.array(img.convert("RGB"))
-        tensor = self.transform(image=img_np)["image"].unsqueeze(0).to(self.device)
+        transformed = self.transform(image=img_np)["image"]          # (H, W, 3) float32
+        inp = transformed.transpose(2, 0, 1)[np.newaxis].astype(np.float32)  # (1, 3, H, W)
 
-        with torch.amp.autocast(device_type=self.device.type, enabled=(self.device.type == "cuda")):
-            logits = self.model(tensor)
+        if self.session is not None:
+            logits = self.session.run(["logits"], {"input": inp})[0][0]
+        else:
+            import torch
+            tensor = torch.from_numpy(inp).to(self.torch_device)
+            with torch.no_grad():
+                logits = self.torch_model(tensor).cpu().numpy()[0]
 
-        probs = torch.softmax(logits, dim=1)[0].cpu().numpy()
+        probs = _softmax(logits)
         top_idx = int(probs.argmax())
         return self.idx_to_class[top_idx], float(probs[top_idx])
 
@@ -197,7 +229,7 @@ app.add_middleware(
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "device": str(ModelLoader.get().device)}
+    return {"status": "ok", "backend": ModelLoader.get().backend}
 
 
 @app.get("/classes")
