@@ -137,12 +137,33 @@ def test_epoch(model, loader, criterion, device, use_amp, num_classes: int):
 
 
 # ──────────────────────────────────────────────
+# 체크포인트
+# ──────────────────────────────────────────────
+
+def save_checkpoint(path, phase, epoch, model, optimizer, scheduler, scaler, best_val_acc, patience_counter):
+    torch.save({
+        "phase": phase,
+        "epoch": epoch,
+        "model_state": model.state_dict(),
+        "optimizer_state": optimizer.state_dict(),
+        "scheduler_state": scheduler.state_dict(),
+        "scaler_state": scaler.state_dict(),
+        "best_val_acc": best_val_acc,
+        "patience_counter": patience_counter,
+    }, path)
+
+
+def load_checkpoint(path, device):
+    return torch.load(path, weights_only=False, map_location=device)
+
+
+# ──────────────────────────────────────────────
 # 메인 학습
 # ──────────────────────────────────────────────
 
 def train(args):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    use_amp = device.type == "cuda"
+    device = torch.device("cuda" if (torch.cuda.is_available() and not args.cpu) else "cpu")
+    use_amp = device.type == "cuda" and not args.no_amp
     print(f"Device: {device} | AMP: {use_amp}")
 
     # WandB 초기화
@@ -181,51 +202,77 @@ def train(args):
 
     best_val_acc = 0.0
     patience_counter = 0
+    resume_phase, resume_epoch = 1, 0
+    ckpt = None
+
+    # 체크포인트 로드
+    ckpt_path = save_dir / "checkpoint.pth"
+    if ckpt_path.exists():
+        ckpt = load_checkpoint(ckpt_path, device)
+        resume_phase = ckpt["phase"]
+        resume_epoch = ckpt["epoch"]
+        best_val_acc = ckpt["best_val_acc"]
+        model.load_state_dict(ckpt["model_state"])
+        print(f"체크포인트 로드: Phase {resume_phase}, "
+              f"Epoch {resume_epoch}, best_val_acc={best_val_acc:.4f}")
+    else:
+        print("체크포인트 없음 — 처음부터 학습")
 
     # ────────────────────────────────
     # Phase 1: Head만 학습
     # ────────────────────────────────
-    freeze_backbone(model)
-    optimizer = optim.AdamW(
-        filter(lambda p: p.requires_grad, model.parameters()),
-        lr=1e-3, weight_decay=1e-4
-    )
-    scheduler = CosineAnnealingLR(optimizer, T_max=args.phase1_epochs)
+    if resume_phase == 1:
+        freeze_backbone(model)
+        optimizer = optim.AdamW(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=1e-3, weight_decay=1e-4
+        )
+        scheduler = CosineAnnealingLR(optimizer, T_max=args.phase1_epochs)
 
-    print(f"\n{'─'*40}")
-    print(f"Phase 1 시작 ({args.phase1_epochs} epochs)")
-    print(f"{'─'*40}")
+        if ckpt is not None and resume_phase == 1 and resume_epoch > 0:
+            optimizer.load_state_dict(ckpt["optimizer_state"])
+            scheduler.load_state_dict(ckpt["scheduler_state"])
+            scaler.load_state_dict(ckpt["scaler_state"])
+            patience_counter = ckpt["patience_counter"]
 
-    for epoch in range(1, args.phase1_epochs + 1):
-        train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device, scaler, use_amp)
-        val_loss, val_acc = val_epoch(model, val_loader, criterion, device, use_amp)
-        scheduler.step()
+        p1_start = resume_epoch + 1
+        if p1_start <= args.phase1_epochs:
+            print(f"\n{'─'*40}")
+            print(f"Phase 1 시작 (epoch {p1_start}~{args.phase1_epochs})")
+            print(f"{'─'*40}")
 
-        print(f"  Epoch {epoch:2d}/{args.phase1_epochs} | "
-              f"train_loss: {train_loss:.4f}  train_acc: {train_acc:.4f} | "
-              f"val_loss: {val_loss:.4f}  val_acc: {val_acc:.4f}")
+        for epoch in range(p1_start, args.phase1_epochs + 1):
+            train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device, scaler, use_amp)
+            val_loss, val_acc = val_epoch(model, val_loader, criterion, device, use_amp)
+            scheduler.step()
 
-        if use_wandb:
-            wandb.log({
-                "phase": 1, "epoch": epoch,
-                "train/loss": train_loss, "train/acc": train_acc,
-                "val/loss": val_loss, "val/acc": val_acc,
-                "lr": scheduler.get_last_lr()[0],
-            })
+            print(f"  Epoch {epoch:2d}/{args.phase1_epochs} | "
+                  f"train_loss: {train_loss:.4f}  train_acc: {train_acc:.4f} | "
+                  f"val_loss: {val_loss:.4f}  val_acc: {val_acc:.4f}")
 
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            patience_counter = 0
-            torch.save(model.state_dict(), save_dir / "best_model.pth")
-            print(f"  → best 저장 (val_acc: {val_acc:.4f})")
-        else:
-            patience_counter += 1
+            if use_wandb:
+                wandb.log({
+                    "phase": 1, "epoch": epoch,
+                    "train/loss": train_loss, "train/acc": train_acc,
+                    "val/loss": val_loss, "val/acc": val_acc,
+                    "lr": scheduler.get_last_lr()[0],
+                })
+
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+                patience_counter = 0
+                torch.save(model.state_dict(), save_dir / "best_model.pth")
+                print(f"  → best 저장 (val_acc: {val_acc:.4f})")
+            else:
+                patience_counter += 1
+
+            save_checkpoint(ckpt_path, 1, epoch, model, optimizer, scheduler,
+                            scaler, best_val_acc, patience_counter)
 
     # ────────────────────────────────
     # Phase 2: 전체 fine-tune
     # ────────────────────────────────
     unfreeze_all(model)
-    patience_counter = 0  # Phase 2 시작 시 리셋
 
     optimizer = optim.AdamW(
         model.parameters(),
@@ -233,11 +280,23 @@ def train(args):
     )
     scheduler = CosineAnnealingLR(optimizer, T_max=args.phase2_epochs)
 
-    print(f"\n{'─'*40}")
-    print(f"Phase 2 시작 ({args.phase2_epochs} epochs, patience={args.patience})")
-    print(f"{'─'*40}")
+    p2_start = 1
+    if resume_phase == 2:
+        patience_counter = ckpt["patience_counter"]
+        optimizer.load_state_dict(ckpt["optimizer_state"])
+        scheduler.load_state_dict(ckpt["scheduler_state"])
+        if ckpt.get("scaler_state"):
+            scaler.load_state_dict(ckpt["scaler_state"])
+        p2_start = resume_epoch + 1
+    else:
+        patience_counter = 0  # Phase 2 새로 시작 시 리셋
 
-    for epoch in range(1, args.phase2_epochs + 1):
+    if p2_start <= args.phase2_epochs:
+        print(f"\n{'─'*40}")
+        print(f"Phase 2 시작 (epoch {p2_start}~{args.phase2_epochs}, patience={args.patience})")
+        print(f"{'─'*40}")
+
+    for epoch in range(p2_start, args.phase2_epochs + 1):
         train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device, scaler, use_amp)
         val_loss, val_acc = val_epoch(model, val_loader, criterion, device, use_amp)
         scheduler.step()
@@ -264,6 +323,9 @@ def train(args):
             if args.patience > 0 and patience_counter >= args.patience:
                 print(f"  Early stopping (patience={args.patience})")
                 break
+
+        save_checkpoint(ckpt_path, 2, epoch, model, optimizer, scheduler,
+                        scaler, best_val_acc, patience_counter)
 
     # ────────────────────────────────
     # 최종 테스트
@@ -313,6 +375,10 @@ if __name__ == "__main__":
     parser.add_argument("--phase1-epochs",  type=int,   default=5)
     parser.add_argument("--phase2-epochs",  type=int,   default=30)
     parser.add_argument("--phase2-lr",      type=float, default=1e-5)
+    parser.add_argument("--cpu",            action="store_true",
+                        help="CPU 강제 사용")
+    parser.add_argument("--no-amp",         action="store_true",
+                        help="AMP(mixed precision) 비활성화")
     parser.add_argument("--patience",       type=int,   default=7,
                         help="Early stopping patience (0=비활성화)")
     parser.add_argument("--wandb",          action="store_true",
