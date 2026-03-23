@@ -8,9 +8,14 @@ Swin Transformer-Tiny 기반 홀로라이브 캐릭터 분류기
 anihoin/
 ├── crawling/
 │   └── danbooru_crawler.py  # danbooru SFW 이미지 크롤러
+├── pipeline/
+│   ├── run_pipeline.sh      # 전체 파이프라인 마스터 스크립트
+│   ├── release.sh           # GitHub Release 자동 생성
+│   └── README.md            # 파이프라인 사용 가이드
 ├── dataset.py               # Dataset / Augmentation / DataLoader
 ├── train.py                 # 2-phase fine-tuning 학습 스크립트
 ├── main.py                  # FastAPI 추론 서버
+├── demo_gradio.py           # Gradio Web UI 데모
 ├── demo/
 │   └── index.html           # 데모 페이지
 └── pyproject.toml
@@ -162,6 +167,20 @@ curl -X POST "http://localhost:8000/predict" \
 | `GET`  | `/classes` | 지원 캐릭터 전체 목록. 응답 JSON 구성:<br>`{ "total": 62, "classes": [ { "id": 0, "character": "houshou_marine", "char_name": "Houshou Marine", "cardinal": 19, "affiliation": "JP" }, ... ] }` |
 | `GET`  | `/health` | 서버 상태 및 현재 활성화된 모델 추론 디바이스 확인. 응답 JSON 구성:<br>`{ "status": "ok", "backend": "onnx+ROCMExecutionProvider" }` 등 |
 | `GET`  | `/docs` | OpenAPI 문서 형태의 Swagger UI 제공 |
+
+## 파이프라인 (v2, v3 신규 학습)
+
+새로운 데이터를 확보한 후 버전업 학습부터 배포까지 자동화하는 파이프라인을 제공합니다.
+
+```bash
+# 크롤링 후 전체 파이프라인 실행 (+ GitHub Release 자동 생성)
+bash pipeline/run_pipeline.sh --version v2.0.0 --release
+
+# 데이터 이미 있는 경우 크롤링 건너뜨다
+bash pipeline/run_pipeline.sh --version v2.0.0 --skip-crawl --release
+```
+
+상세 옵션 및 수동 릴리즈 방법은 [pipeline/README.md](pipeline/README.md) 참조.
 
 ## 모델 선택 근거
 
