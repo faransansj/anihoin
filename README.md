@@ -114,7 +114,14 @@ uv run python main.py
 # http://localhost:8000/docs 에서 Swagger UI 확인
 ```
 
-### 4. API 사용 예시
+### 4. Web UI 데모 실행 (Gradio)
+```bash
+uv run python demo_gradio.py
+# http://localhost:7860 에서 브라우저 접속
+# FP32 / FP16 모델 전환 및 API Json을 함께 확인할 수 있습니다.
+```
+
+### 5. API 사용 예시
 
 ```bash
 # 이미지 분류
