@@ -6,12 +6,13 @@ Swin Transformer-Tiny 기반 홀로라이브 캐릭터 분류기
 
 ```
 anihoin/
-├── danbooru_crawler.py   # danbooru SFW 이미지 크롤러
-├── dataset.py            # Dataset / Augmentation / DataLoader
-├── train.py              # 2-phase fine-tuning 학습 스크립트
-├── main.py               # FastAPI 추론 서버
+├── crawling/
+│   └── danbooru_crawler.py  # danbooru SFW 이미지 크롤러
+├── dataset.py               # Dataset / Augmentation / DataLoader
+├── train.py                 # 2-phase fine-tuning 학습 스크립트
+├── main.py                  # FastAPI 추론 서버
 ├── demo/
-│   └── index.html        # 데모 페이지
+│   └── index.html           # 데모 페이지
 └── pyproject.toml
 ```
 
@@ -45,13 +46,13 @@ cp .env.example .env
 
 ```bash
 # 기본 실행 (.env 자동 로드)
-uv run python danbooru_crawler.py
+uv run python crawling/danbooru_crawler.py
 
 # 직접 자격증명 전달
-uv run python danbooru_crawler.py -u YOUR_NAME -k YOUR_KEY
+uv run python crawling/danbooru_crawler.py -u YOUR_NAME -k YOUR_KEY
 
 # 주요 옵션
-uv run python danbooru_crawler.py \
+uv run python crawling/danbooru_crawler.py \
   --min-images 300 \
   --max-images 2000 \
   --workers 8 \
@@ -153,14 +154,14 @@ curl -X POST "http://localhost:8000/predict" \
 | `meta.cardinal` | int | 해당 지부 내 데뷔 순번 |
 | `meta.affiliation` | `JP` \| `EN` \| `IND` \| `null` | 소속 지부 |
 
-**엔드포인트 목록:**
+**엔드포인트 상세 목록:**
 
 | Method | Path | 설명 |
 |--------|------|------|
-| `POST` | `/predict` | 이미지 분류 |
-| `GET` | `/classes` | 지원 캐릭터 전체 목록 |
-| `GET` | `/health` | 서버 상태 및 디바이스 확인 |
-| `GET` | `/docs` | Swagger UI |
+| `POST` | `/predict` | 이미지 분류. 이미지 파일을 `file` 파라미터(multipart/form-data)로 업로드하면, 식별된 캐릭터 정보와 확률(Confidence)을 JSON으로 응답합니다. 상단 *Response* 예제 참조. |
+| `GET`  | `/classes` | 지원 캐릭터 전체 목록. 응답 JSON 구성:<br>`{ "total": 62, "classes": [ { "id": 0, "character": "houshou_marine", "char_name": "Houshou Marine", "cardinal": 19, "affiliation": "JP" }, ... ] }` |
+| `GET`  | `/health` | 서버 상태 및 현재 활성화된 모델 추론 디바이스 확인. 응답 JSON 구성:<br>`{ "status": "ok", "backend": "onnx+ROCMExecutionProvider" }` 등 |
+| `GET`  | `/docs` | OpenAPI 문서 형태의 Swagger UI 제공 |
 
 ## 모델 선택 근거
 
