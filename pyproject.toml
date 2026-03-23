@@ -24,6 +24,8 @@ dependencies = [
     # 추론 엔진 (CPU EP 기본 포함)
     "onnxruntime>=1.17.0",
     "onnxscript>=0.6.2",
+    # 웹 UI
+    "gradio>=4.0",
 ]
 
 [project.optional-dependencies]
@@ -33,8 +35,12 @@ logging = ["wandb>=0.16.0"]
 # 실행 시: HSA_OVERRIDE_GFX_VERSION=11.0.0 uv run python main.py
 
 [tool.uv.sources]
-torch = { index = "pytorch-rocm" }
-torchvision = { index = "pytorch-rocm" }
+torch = [
+    { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
+]
+torchvision = [
+    { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
+]
 triton-rocm = { index = "pytorch-rocm" }
 
 [[tool.uv.index]]
