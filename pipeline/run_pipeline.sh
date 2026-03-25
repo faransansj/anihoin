@@ -36,6 +36,8 @@ PHASE1_EPOCHS=5
 PHASE2_EPOCHS=30
 PHASE2_LR=1e-5
 PATIENCE=7
+XPU_FLAG=""        # Intel Arc XPU 사용 시 --xpu
+DEVICE_STR=""      # 디바이스 직접 지정 (xpu:0, cuda:1 등)
 
 usage() {
     cat <<EOF
@@ -48,13 +50,13 @@ HoloScope 학습 파이프라인
   --version <TAG>         릴리즈 버전 태그 (예: v2.0.0)
 
 크롤링 옵션:
-  --skip-crawl            크롤링 단계 건너뜀
+  --skip-crawl            크롤링 단계 건너뛰
   --min-images <N>        캐릭터당 최소 이미지 수 (기본: 500)
   --max-images <N>        캐릭터당 최대 이미지 수 (기본: 1000)
   --crawl-workers <N>     크롤링 병렬 워커 수 (기본: 4)
 
 학습 옵션:
-  --skip-train            학습 단계 건너뜀 (이미 학습된 모델 사용)
+  --skip-train            학습 단계 건너뛰 (이미 학습된 모델 사용)
   --data-dir <DIR>        학습 데이터 경로 (기본: ./dataset/raw)
   --checkpoint-dir <DIR>  체크포인트 저장 경로 (기본: ./checkpoints)
   --batch-size <N>        배치 크기 (기본: 32)
@@ -63,7 +65,11 @@ HoloScope 학습 파이프라인
   --phase2-lr <FLOAT>     Phase2 학습률 (기본: 1e-5)
   --patience <N>          Early stopping patience (기본: 7)
 
-배포 옵션:
+GPU 옵션:
+  --xpu                   Intel Arc GPU (XPU) 사용 (IPEX 필요)
+  --device <DEV>          디바이스 직접 지정 (예: xpu:0, cuda:1)
+
+릴리스 옵션:
   --release               학습 완료 후 GitHub Release 자동 생성
 
 기타:
@@ -89,6 +95,8 @@ while [[ $# -gt 0 ]]; do
         --phase2-epochs) PHASE2_EPOCHS="$2";     shift 2 ;;
         --phase2-lr)     PHASE2_LR="$2";         shift 2 ;;
         --patience)      PATIENCE="$2";          shift 2 ;;
+        --xpu)           XPU_FLAG="--xpu";       shift ;;
+        --device)        DEVICE_STR="$2";        shift 2 ;;
         --help)          usage ;;
         *) error "알 수 없는 옵션: $1 (--help 참조)" ;;
     esac
@@ -166,6 +174,12 @@ if $SKIP_TRAIN; then
 else
     info "학습 시작 (로그 → $LOG_FILE)"
     info "모니터링: bash monitor.sh $LOG_FILE"
+
+    # 디바이스 옵션 조합 (XPU_FLAG, DEVICE_STR 다 뱈 가능)
+    DEVICE_OPTS=""
+    [[ -n "$XPU_FLAG" ]]   && DEVICE_OPTS="$DEVICE_OPTS $XPU_FLAG"
+    [[ -n "$DEVICE_STR" ]] && DEVICE_OPTS="$DEVICE_OPTS --device $DEVICE_STR"
+
     uv run python train.py \
         --data-dir       "$DATA_DIR" \
         --save-dir       "$CHECKPOINT_DIR" \
@@ -174,6 +188,7 @@ else
         --phase2-epochs  "$PHASE2_EPOCHS" \
         --phase2-lr      "$PHASE2_LR" \
         --patience       "$PATIENCE" \
+        $DEVICE_OPTS \
         2>&1 | tee "$LOG_FILE"
     success "학습 완료"
 fi
