@@ -5,6 +5,7 @@ Swin Transformer-Tiny 학습 스크립트
 - WandB 로깅 (선택)
 - 최고 val_acc 모델 자동 저장
 - Early stopping 지원
+- Intel Arc GPU (XPU) 지원 — IPEX 설치 시 자동 활성화
 """
 
 import os
@@ -26,6 +27,52 @@ try:
     WANDB_AVAILABLE = True
 except ImportError:
     WANDB_AVAILABLE = False
+
+try:
+    import intel_extension_for_pytorch as ipex  # Intel Arc XPU 지원
+    IPEX_AVAILABLE = True
+except ImportError:
+    IPEX_AVAILABLE = False
+
+
+# ──────────────────────────────────────────────
+# 디바이스 감지
+# ──────────────────────────────────────────────
+
+def detect_device(force_xpu: bool = False, force_cpu: bool = False, device_str: str = "") -> torch.device:
+    """디바이스 우선순위: --device 명시 > --xpu > --cpu > xpu > cuda > cpu"""
+    if force_cpu:
+        return torch.device("cpu")
+    if device_str:
+        return torch.device(device_str)
+    if force_xpu:
+        if IPEX_AVAILABLE and torch.xpu.is_available():
+            return torch.device("xpu")
+        raise RuntimeError(
+            "--xpu 플래그를 지정했지만 Intel Arc XPU를 사용할 수 없습니다.\n"
+            "  1) intel-extension-for-pytorch 설치: uv sync --extra arc\n"
+            "  2) Intel GPU 드라이버 설치 확인\n"
+            "  3) docs/intel_arc_setup.md 참조"
+        )
+    if IPEX_AVAILABLE and torch.xpu.is_available():
+        return torch.device("xpu")
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    return torch.device("cpu")
+
+
+def make_scaler(device: torch.device, enabled: bool) -> torch.amp.GradScaler:
+    """device-aware GradScaler 생성 (XPU / CUDA / CPU)"""
+    dev_type = device.type
+    if dev_type == "xpu":
+        # IPEX XPU는 GradScaler를 직접 지원 (IPEX>=2.1)
+        try:
+            return torch.amp.GradScaler(dev_type, enabled=enabled)
+        except Exception:
+            return torch.amp.GradScaler("cpu", enabled=False)
+    if dev_type == "cuda":
+        return torch.amp.GradScaler("cuda", enabled=enabled)
+    return torch.amp.GradScaler("cpu", enabled=False)
 
 
 # ──────────────────────────────────────────────
@@ -162,9 +209,15 @@ def load_checkpoint(path, device):
 # ──────────────────────────────────────────────
 
 def train(args):
-    device = torch.device("cuda" if (torch.cuda.is_available() and not args.cpu) else "cpu")
-    use_amp = device.type == "cuda" and not args.no_amp
-    print(f"Device: {device} | AMP: {use_amp}")
+    device = detect_device(
+        force_xpu=args.xpu,
+        force_cpu=args.cpu,
+        device_str=args.device,
+    )
+    # AMP: CUDA는 기본 활성화, XPU는 IPEX 최적화 경로 사용 (bf16 권장)
+    use_amp = device.type in ("cuda", "xpu") and not args.no_amp
+    print(f"Device: {device} | AMP: {use_amp}"
+          + (" | IPEX" if (IPEX_AVAILABLE and device.type == "xpu") else ""))
 
     # WandB 초기화
     use_wandb = args.wandb and WANDB_AVAILABLE
@@ -198,7 +251,10 @@ def train(args):
 
     # Loss: Label Smoothing으로 과적합 방지
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
-    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    scaler = make_scaler(device, enabled=use_amp)
+
+    # IPEX XPU 최적화 적용 여부 플래그
+    _use_ipex = IPEX_AVAILABLE and device.type == "xpu"
 
     best_val_acc = 0.0
     patience_counter = 0
@@ -228,6 +284,10 @@ def train(args):
             lr=1e-3, weight_decay=1e-4
         )
         scheduler = CosineAnnealingLR(optimizer, T_max=args.phase1_epochs)
+        if _use_ipex:
+            # AMP 대상 연산 dtype: bf16 (Arc 권장), fp16 (Arc A-Series 학습용)
+            dtype = torch.bfloat16 if use_amp else torch.float32
+            model, optimizer = ipex.optimize(model, optimizer=optimizer, dtype=dtype)
 
         if ckpt is not None and resume_phase == 1 and resume_epoch > 0:
             optimizer.load_state_dict(ckpt["optimizer_state"])
@@ -279,6 +339,9 @@ def train(args):
         lr=args.phase2_lr, weight_decay=1e-4
     )
     scheduler = CosineAnnealingLR(optimizer, T_max=args.phase2_epochs)
+    if _use_ipex:
+        dtype = torch.bfloat16 if use_amp else torch.float32
+        model, optimizer = ipex.optimize(model, optimizer=optimizer, dtype=dtype)
 
     p2_start = 1
     if resume_phase == 2:
@@ -375,10 +438,16 @@ if __name__ == "__main__":
     parser.add_argument("--phase1-epochs",  type=int,   default=5)
     parser.add_argument("--phase2-epochs",  type=int,   default=30)
     parser.add_argument("--phase2-lr",      type=float, default=1e-5)
+    # ── 디바이스 옵션 ──────────────────────────────────
+    parser.add_argument("--xpu",            action="store_true",
+                        help="Intel Arc GPU(XPU) 강제 사용 (IPEX 필요)")
     parser.add_argument("--cpu",            action="store_true",
                         help="CPU 강제 사용")
+    parser.add_argument("--device",         default="",
+                        help="디바이스 직접 지정 (예: xpu, xpu:0, cuda:1)")
     parser.add_argument("--no-amp",         action="store_true",
                         help="AMP(mixed precision) 비활성화")
+    # ── 학습 옵션 ──────────────────────────────────────
     parser.add_argument("--patience",       type=int,   default=7,
                         help="Early stopping patience (0=비활성화)")
     parser.add_argument("--wandb",          action="store_true",
