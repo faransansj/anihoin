@@ -33,7 +33,12 @@ uv sync
 
 # wandb 로깅까지 설치하는 경우
 uv sync --extra logging
+
+# Intel Arc GPU (XPU) 학습 지원
+uv sync --extra arc
 ```
+
+> **Intel Arc 사용자** → [Intel Arc GPU 셋업 가이드](docs/intel_arc_setup.md) 참조
 
 ### 1. 크롤링
 
@@ -102,6 +107,10 @@ uv run python train.py \
 | `--phase2-epochs` | `30` | Full fine-tune epoch 수 |
 | `--phase2-lr` | `1e-5` | Phase 2 학습률 |
 | `--patience` | `7` | Early stopping patience (0=비활성화) |
+| `--xpu` | `false` | Intel Arc GPU(XPU) 강제 사용 (IPEX 필요) |
+| `--device` | `""` | 디바이스 직접 지정 (예: `xpu:0`, `cuda:1`) |
+| `--cpu` | `false` | CPU 강제 사용 |
+| `--no-amp` | `false` | Mixed Precision 비활성화 |
 | `--wandb` | `false` | WandB 로깅 활성화 |
 | `--wandb-project` | `holoscope` | WandB 프로젝트명 |
 

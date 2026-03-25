@@ -30,6 +30,12 @@ dependencies = [
 
 [project.optional-dependencies]
 logging = ["wandb>=0.16.0"]
+# Intel Arc GPU 학습 지원
+# 설치: uv sync --extra arc
+arc = [
+    "intel-extension-for-pytorch>=2.3.0",
+    "oneccl-bind-pt>=2.3.0",
+]
 # ROCm GPU 추론: onnxruntime 대신 onnxruntime-rocm 설치
 # pip install onnxruntime-rocm  (onnxruntime과 충돌하므로 단독 사용)
 # 실행 시: HSA_OVERRIDE_GFX_VERSION=11.0.0 uv run python main.py
@@ -42,8 +48,16 @@ torchvision = [
     { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
 ]
 triton-rocm = { index = "pytorch-rocm" }
+# Intel Arc XPU 전용 패키지
+intel-extension-for-pytorch = { index = "pytorch-ipex" }
+oneccl-bind-pt = { index = "pytorch-ipex" }
 
 [[tool.uv.index]]
 name = "pytorch-rocm"
 url = "https://download.pytorch.org/whl/rocm7.1"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-ipex"
+url = "https://pytorch-extension.intel.com/release-whl/stable/xpu/us/"
 explicit = true
