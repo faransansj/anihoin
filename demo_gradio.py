@@ -83,12 +83,13 @@ class DemoModelLoader:
         self.current_precision = precision
         print(f"[{precision}] 로드 완료")
 
-    def predict(self, img: Image.Image, precision: str) -> tuple[dict, dict]:
+    def predict(self, img_path: str, precision: str) -> tuple[dict, dict]:
         """추론 수행 후 (Label용 dict, JSON용 dict) 반환"""
         self.load(precision)
 
-        img_np = np.array(img.convert("RGB"))
-        transformed = self.transform(image=img_np)["image"]          
+        img = Image.open(img_path).convert("RGB")
+        img_np = np.array(img)
+        transformed = self.transform(image=img_np)["image"]
         inp = transformed.transpose(2, 0, 1)[np.newaxis].astype(np.float32)
 
         tensor = torch.from_numpy(inp).to(self.device)
@@ -125,16 +126,23 @@ class DemoModelLoader:
         # API JSON 포맷
         meta_raw = CHARACTER_META.get(
             top_char_key,
-            {"char_name": top_char_key, "cardinal": 0, "affiliation": None},
+            {"char_name": top_char_key, "generation": None, "group": None, "affiliation": None},
         )
-        
-        if isinstance(meta_raw.get("affiliation"), slice) or hasattr(meta_raw.get("affiliation"), "value"):
-            meta_raw["affiliation"] = meta_raw["affiliation"].value
+
+        # Affiliation enum → string
+        affiliation = meta_raw.get("affiliation")
+        if hasattr(affiliation, "value"):
+            affiliation = affiliation.value
 
         api_json = {
-            "file_name": "uploaded_image.jpg",
+            "file_name": Path(img_path).name,
             "confidence": round(top_conf, 4),
-            "meta": meta_raw,
+            "meta": {
+                "char_name":   meta_raw.get("char_name", top_char_key),
+                "generation":  meta_raw.get("generation"),
+                "group":       meta_raw.get("group"),
+                "affiliation": affiliation,
+            },
             "_debug": {
                 "precision": precision,
                 "inference_time_sec": round(inf_time, 4),
@@ -150,11 +158,11 @@ loader = DemoModelLoader()
 # 3. Gradio 인터페이스 구성
 # ──────────────────────────────────────────────
 
-def process_image(img, precision):
-    if img is None:
+def process_image(img_path, precision):
+    if img_path is None:
         return None, None
     try:
-        labels_dict, api_json = loader.predict(img, precision)
+        labels_dict, api_json = loader.predict(img_path, precision)
         return labels_dict, api_json
     except Exception as e:
         return {"Error": 1.0}, {"error": str(e)}
@@ -165,7 +173,7 @@ with gr.Blocks(title="HoloScope Classification UI") as demo:
     
     with gr.Row():
         with gr.Column(scale=1):
-            img_input = gr.Image(type="pil", label="이미지 업로드")
+            img_input = gr.Image(type="filepath", label="이미지 업로드")
             precision_radio = gr.Radio(
                 choices=["FP32", "FP16"], 
                 value="FP16", 
