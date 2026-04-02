@@ -40,7 +40,7 @@ except ImportError:
 # ──────────────────────────────────────────────
 
 def detect_device(force_xpu: bool = False, force_cpu: bool = False, device_str: str = "") -> torch.device:
-    """디바이스 우선순위: --device 명시 > --xpu > --cpu > xpu > cuda > cpu"""
+    """디바이스 우선순위: --device 명시 > --xpu > --cpu > xpu > cuda > mps > cpu"""
     if force_cpu:
         return torch.device("cpu")
     if device_str:
@@ -58,6 +58,8 @@ def detect_device(force_xpu: bool = False, force_cpu: bool = False, device_str: 
         return torch.device("xpu")
     if torch.cuda.is_available():
         return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
     return torch.device("cpu")
 
 
@@ -214,10 +216,11 @@ def train(args):
         force_cpu=args.cpu,
         device_str=args.device,
     )
-    # AMP: CUDA는 기본 활성화, XPU는 IPEX 최적화 경로 사용 (bf16 권장)
+    # AMP: CUDA/XPU만 활성화. MPS/CPU는 AMP 미지원
     use_amp = device.type in ("cuda", "xpu") and not args.no_amp
     print(f"Device: {device} | AMP: {use_amp}"
-          + (" | IPEX" if (IPEX_AVAILABLE and device.type == "xpu") else ""))
+          + (" | IPEX" if (IPEX_AVAILABLE and device.type == "xpu") else "")
+          + (" | Apple Silicon MPS" if device.type == "mps" else ""))
 
     # WandB 초기화
     use_wandb = args.wandb and WANDB_AVAILABLE
@@ -261,9 +264,18 @@ def train(args):
     resume_phase, resume_epoch = 1, 0
     ckpt = None
 
-    # 체크포인트 로드
+    # --finetune: best_model.pth를 로드해 Phase 2부터 추가학습
+    if args.finetune:
+        best_pth = save_dir / "best_model.pth"
+        if not best_pth.exists():
+            raise FileNotFoundError(f"--finetune 모드인데 {best_pth} 가 없습니다.")
+        model.load_state_dict(torch.load(best_pth, weights_only=True, map_location=device))
+        resume_phase = 2  # Phase 2(전체 fine-tune)부터 시작
+        print(f"[finetune] {best_pth} 로드 완료 — Phase 2 추가학습 시작")
+
+    # 체크포인트 로드 (--finetune 없을 때만)
     ckpt_path = save_dir / "checkpoint.pth"
-    if ckpt_path.exists():
+    if not args.finetune and ckpt_path.exists():
         ckpt = load_checkpoint(ckpt_path, device)
         resume_phase = ckpt["phase"]
         resume_epoch = ckpt["epoch"]
@@ -271,7 +283,7 @@ def train(args):
         model.load_state_dict(ckpt["model_state"])
         print(f"체크포인트 로드: Phase {resume_phase}, "
               f"Epoch {resume_epoch}, best_val_acc={best_val_acc:.4f}")
-    else:
+    elif not args.finetune:
         print("체크포인트 없음 — 처음부터 학습")
 
     # ────────────────────────────────
@@ -448,6 +460,8 @@ if __name__ == "__main__":
     parser.add_argument("--no-amp",         action="store_true",
                         help="AMP(mixed precision) 비활성화")
     # ── 학습 옵션 ──────────────────────────────────────
+    parser.add_argument("--finetune",        action="store_true",
+                        help="best_model.pth 로드 후 Phase 2 추가학습 (새 데이터 추가 시)")
     parser.add_argument("--patience",       type=int,   default=7,
                         help="Early stopping patience (0=비활성화)")
     parser.add_argument("--wandb",          action="store_true",
