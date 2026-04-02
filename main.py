@@ -53,51 +53,85 @@ class Affiliation(str, Enum):
 
 
 CHARACTER_META: dict[str, dict] = {
-    # ── JP ──────────────────────────────────────
-    "tokino_sora":        {"char_name": "Tokino Sora (ときのそら)",               "cardinal": 1,  "affiliation": Affiliation.JP},
-    "roboco":             {"char_name": "Roboco-san (ロボ子さん)",                "cardinal": 2,  "affiliation": Affiliation.JP},
-    "sakura_miko":        {"char_name": "Sakura Miko (さくらみこ)",               "cardinal": 3,  "affiliation": Affiliation.JP},
-    "hoshimachi_suisei":  {"char_name": "Hoshimachi Suisei (星街すいせい)",       "cardinal": 4,  "affiliation": Affiliation.JP},
-    "azki":               {"char_name": "AZKi",                                   "cardinal": 5,  "affiliation": Affiliation.JP},
-    "yozora_mel":         {"char_name": "Yozora Mel (夜空メル)",                  "cardinal": 6,  "affiliation": Affiliation.JP},
-    "shirakami_fubuki":   {"char_name": "Shirakami Fubuki (白上フブキ)",          "cardinal": 7,  "affiliation": Affiliation.JP},
-    "natsuiro_matsuri":   {"char_name": "Natsuiro Matsuri (夏色まつり)",          "cardinal": 8,  "affiliation": Affiliation.JP},
-    "aki_rosenthal":      {"char_name": "Aki Rosenthal (アキ・ローゼンタール)",   "cardinal": 9,  "affiliation": Affiliation.JP},
-    "akai_haato":         {"char_name": "Akai Haato (赤井はあと)",                "cardinal": 10, "affiliation": Affiliation.JP},
-    "minato_aqua":        {"char_name": "Minato Aqua (湊あくあ)",                 "cardinal": 11, "affiliation": Affiliation.JP},
-    "murasaki_shion":     {"char_name": "Murasaki Shion (紫咲シオン)",            "cardinal": 12, "affiliation": Affiliation.JP},
-    "nakiri_ayame":       {"char_name": "Nakiri Ayame (百鬼あやめ)",              "cardinal": 13, "affiliation": Affiliation.JP},
-    "yuzuki_choco":       {"char_name": "Yuzuki Choco (癒月ちょこ)",              "cardinal": 14, "affiliation": Affiliation.JP},
-    "oozora_subaru":      {"char_name": "Oozora Subaru (大空スバル)",             "cardinal": 15, "affiliation": Affiliation.JP},
-    "usada_pekora":       {"char_name": "Usada Pekora (兎田ぺこら)",              "cardinal": 16, "affiliation": Affiliation.JP},
-    "shiranui_flare":     {"char_name": "Shiranui Flare (不知火フレア)",          "cardinal": 17, "affiliation": Affiliation.JP},
-    "shirogane_noel":     {"char_name": "Shirogane Noel (白銀ノエル)",            "cardinal": 18, "affiliation": Affiliation.JP},
-    "houshou_marine":     {"char_name": "Houshou Marine (宝鐘マリン)",            "cardinal": 19, "affiliation": Affiliation.JP},
-    "amane_kanata":       {"char_name": "Amane Kanata (天音かなた)",              "cardinal": 20, "affiliation": Affiliation.JP},
-    "tsunomaki_watame":   {"char_name": "Tsunomaki Watame (角巻わため)",          "cardinal": 21, "affiliation": Affiliation.JP},
-    "tokoyami_towa":      {"char_name": "Tokoyami Towa (常闇トワ)",              "cardinal": 22, "affiliation": Affiliation.JP},
-    "himemori_luna":      {"char_name": "Himemori Luna (姫森ルーナ)",             "cardinal": 23, "affiliation": Affiliation.JP},
-    "yukihana_lamy":      {"char_name": "Yukihana Lamy (雪花ラミィ)",             "cardinal": 24, "affiliation": Affiliation.JP},
-    "momosuzu_nene":      {"char_name": "Momosuzu Nene (桃鈴ねね)",              "cardinal": 25, "affiliation": Affiliation.JP},
-    "shishiro_botan":     {"char_name": "Shishiro Botan (獅白ぼたん)",            "cardinal": 26, "affiliation": Affiliation.JP},
-    "omaru_polka":        {"char_name": "Omaru Polka (尾丸ポルカ)",               "cardinal": 27, "affiliation": Affiliation.JP},
-    "laplus_darknesss":   {"char_name": "La+ Darknesss (ラプラス・ダークネス)",   "cardinal": 28, "affiliation": Affiliation.JP},
-    "takane_lui":         {"char_name": "Takane Lui (鷹嶺ルイ)",                  "cardinal": 29, "affiliation": Affiliation.JP},
-    "hakui_koyori":       {"char_name": "Hakui Koyori (博衣こより)",              "cardinal": 30, "affiliation": Affiliation.JP},
-    "sakamata_chloe":     {"char_name": "Sakamata Chloe (沙花叉クロヱ)",         "cardinal": 31, "affiliation": Affiliation.JP},
-    "kazama_iroha":       {"char_name": "Kazama Iroha (風真いろは)",              "cardinal": 32, "affiliation": Affiliation.JP},
-    # ── EN ──────────────────────────────────────
-    "mori_calliope":      {"char_name": "Mori Calliope",                          "cardinal": 1,  "affiliation": Affiliation.EN},
-    "takanashi_kiara":    {"char_name": "Takanashi Kiara",                        "cardinal": 2,  "affiliation": Affiliation.EN},
-    "ninomae_inanis":     {"char_name": "Ninomae Ina'nis",                        "cardinal": 3,  "affiliation": Affiliation.EN},
-    "gawr_gura":          {"char_name": "Gawr Gura",                              "cardinal": 4,  "affiliation": Affiliation.EN},
-    "watson_amelia":      {"char_name": "Watson Amelia",                          "cardinal": 5,  "affiliation": Affiliation.EN},
-    "ceres_fauna":        {"char_name": "Ceres Fauna",                            "cardinal": 6,  "affiliation": Affiliation.EN},
-    "ouro_kronii":        {"char_name": "Ouro Kronii",                            "cardinal": 7,  "affiliation": Affiliation.EN},
-    "nanashi_mumei":      {"char_name": "Nanashi Mumei",                          "cardinal": 8,  "affiliation": Affiliation.EN},
-    "hakos_baelz":        {"char_name": "Hakos Baelz",                            "cardinal": 9,  "affiliation": Affiliation.EN},
+    # ── JP 0기생 ────────────────────────────────
+    "tokino_sora":        {"char_name": "Tokino Sora",       "generation": 0, "group": None,       "affiliation": Affiliation.JP},
+    "roboco":             {"char_name": "Roboco-san",        "generation": 0, "group": None,       "affiliation": Affiliation.JP},
+    "sakura_miko":        {"char_name": "Sakura Miko",       "generation": 0, "group": None,       "affiliation": Affiliation.JP},
+    "hoshimachi_suisei":  {"char_name": "Hoshimachi Suisei","generation": 0, "group": None,       "affiliation": Affiliation.JP},
+    "azki":               {"char_name": "AZKi",             "generation": 0, "group": None,       "affiliation": Affiliation.JP},
+    # ── JP 1기생 ────────────────────────────────
+    "yozora_mel":         {"char_name": "Yozora Mel",        "generation": 1, "group": None,       "affiliation": Affiliation.JP},
+    "shirakami_fubuki":   {"char_name": "Shirakami Fubuki",  "generation": 1, "group": None,       "affiliation": Affiliation.JP},
+    "natsuiro_matsuri":   {"char_name": "Natsuiro Matsuri",  "generation": 1, "group": None,       "affiliation": Affiliation.JP},
+    "aki_rosenthal":      {"char_name": "Aki Rosenthal",     "generation": 1, "group": None,       "affiliation": Affiliation.JP},
+    "akai_haato":         {"char_name": "Akai Haato",        "generation": 1, "group": None,       "affiliation": Affiliation.JP},
+    # ── JP 2기생 ────────────────────────────────
+    "minato_aqua":        {"char_name": "Minato Aqua",       "generation": 2, "group": None,       "affiliation": Affiliation.JP},
+    "murasaki_shion":     {"char_name": "Murasaki Shion",    "generation": 2, "group": None,       "affiliation": Affiliation.JP},
+    "nakiri_ayame":       {"char_name": "Nakiri Ayame",      "generation": 2, "group": None,       "affiliation": Affiliation.JP},
+    "yuzuki_choco":       {"char_name": "Yuzuki Choco",      "generation": 2, "group": None,       "affiliation": Affiliation.JP},
+    "oozora_subaru":      {"char_name": "Oozora Subaru",     "generation": 2, "group": None,       "affiliation": Affiliation.JP},
+    # ── JP 3기생 (Fantasy) ──────────────────────
+    "usada_pekora":       {"char_name": "Usada Pekora",      "generation": 3, "group": "Fantasy",  "affiliation": Affiliation.JP},
+    "shiranui_flare":     {"char_name": "Shiranui Flare",    "generation": 3, "group": "Fantasy",  "affiliation": Affiliation.JP},
+    "shirogane_noel":     {"char_name": "Shirogane Noel",    "generation": 3, "group": "Fantasy",  "affiliation": Affiliation.JP},
+    "houshou_marine":     {"char_name": "Houshou Marine",    "generation": 3, "group": "Fantasy",  "affiliation": Affiliation.JP},
+    # ── JP 4기생 (holoForce) ────────────────────
+    "amane_kanata":       {"char_name": "Amane Kanata",      "generation": 4, "group": "holoForce","affiliation": Affiliation.JP},
+    "tsunomaki_watame":   {"char_name": "Tsunomaki Watame",  "generation": 4, "group": "holoForce","affiliation": Affiliation.JP},
+    "tokoyami_towa":      {"char_name": "Tokoyami Towa",     "generation": 4, "group": "holoForce","affiliation": Affiliation.JP},
+    "himemori_luna":      {"char_name": "Himemori Luna",     "generation": 4, "group": "holoForce","affiliation": Affiliation.JP},
+    # ── JP 5기생 (NePoLaBo) ─────────────────────
+    "yukihana_lamy":      {"char_name": "Yukihana Lamy",     "generation": 5, "group": "NePoLaBo", "affiliation": Affiliation.JP},
+    "momosuzu_nene":      {"char_name": "Momosuzu Nene",     "generation": 5, "group": "NePoLaBo", "affiliation": Affiliation.JP},
+    "shishiro_botan":     {"char_name": "Shishiro Botan",    "generation": 5, "group": "NePoLaBo", "affiliation": Affiliation.JP},
+    "omaru_polka":        {"char_name": "Omaru Polka",       "generation": 5, "group": "NePoLaBo", "affiliation": Affiliation.JP},
+    # ── JP 6기생 (holoX) ────────────────────────
+    "laplus_darknesss":   {"char_name": "La+ Darknesss",     "generation": 6, "group": "holoX",    "affiliation": Affiliation.JP},
+    "takane_lui":         {"char_name": "Takane Lui",        "generation": 6, "group": "holoX",    "affiliation": Affiliation.JP},
+    "hakui_koyori":       {"char_name": "Hakui Koyori",      "generation": 6, "group": "holoX",    "affiliation": Affiliation.JP},
+    "sakamata_chloe":     {"char_name": "Sakamata Chloe",    "generation": 6, "group": "holoX",    "affiliation": Affiliation.JP},
+    "kazama_iroha":       {"char_name": "Kazama Iroha",      "generation": 6, "group": "holoX",    "affiliation": Affiliation.JP},
+    # ── DEV_IS ReGLOSS ──────────────────────────
+    "hiodoshi_ao":        {"char_name": "Hiodoshi Ao",       "generation": None, "group": "ReGLOSS", "affiliation": Affiliation.JP},
+    "ichijou_ririka":     {"char_name": "Ichijou Ririka",    "generation": None, "group": "ReGLOSS", "affiliation": Affiliation.JP},
+    "juufuutei_raden":    {"char_name": "Juufuutei Raden",   "generation": None, "group": "ReGLOSS", "affiliation": Affiliation.JP},
+    "otonose_kanade":     {"char_name": "Otonose Kanade",    "generation": None, "group": "ReGLOSS", "affiliation": Affiliation.JP},
+    "todoroki_hajime":    {"char_name": "Todoroki Hajime",   "generation": None, "group": "ReGLOSS", "affiliation": Affiliation.JP},
+    # ── EN Myth (1기) ───────────────────────────
+    "mori_calliope":      {"char_name": "Mori Calliope",      "generation": 1, "group": "Myth",    "affiliation": Affiliation.EN},
+    "takanashi_kiara":    {"char_name": "Takanashi Kiara",    "generation": 1, "group": "Myth",    "affiliation": Affiliation.EN},
+    "ninomae_inanis":     {"char_name": "Ninomae Ina'nis",    "generation": 1, "group": "Myth",    "affiliation": Affiliation.EN},
+    "gawr_gura":          {"char_name": "Gawr Gura",          "generation": 1, "group": "Myth",    "affiliation": Affiliation.EN},
+    "watson_amelia":      {"char_name": "Watson Amelia",      "generation": 1, "group": "Myth",    "affiliation": Affiliation.EN},
+    # ── EN Council (2기) ────────────────────────
+    "ceres_fauna":        {"char_name": "Ceres Fauna",        "generation": 2, "group": "Council", "affiliation": Affiliation.EN},
+    "ouro_kronii":        {"char_name": "Ouro Kronii",        "generation": 2, "group": "Council", "affiliation": Affiliation.EN},
+    "nanashi_mumei":      {"char_name": "Nanashi Mumei",      "generation": 2, "group": "Council", "affiliation": Affiliation.EN},
+    "hakos_baelz":        {"char_name": "Hakos Baelz",        "generation": 2, "group": "Council", "affiliation": Affiliation.EN},
+    # ── EN Advent (3기) ─────────────────────────
+    "koseki_bijou":       {"char_name": "Koseki Bijou",       "generation": 3, "group": "Advent",  "affiliation": Affiliation.EN},
+    "nerissa_ravencroft": {"char_name": "Nerissa Ravencroft", "generation": 3, "group": "Advent",  "affiliation": Affiliation.EN},
+    "shiori_novella":     {"char_name": "Shiori Novella",     "generation": 3, "group": "Advent",  "affiliation": Affiliation.EN},
+    "fuwamoco":           {"char_name": "FUWAMOCO",           "generation": 3, "group": "Advent",  "affiliation": Affiliation.EN},
+    # ── EN Justice (4기) ────────────────────────
+    "elizabeth_rose_bloodflame": {"char_name": "Elizabeth Rose Bloodflame", "generation": 4, "group": "Justice", "affiliation": Affiliation.EN},
+    "gigi_murin":         {"char_name": "Gigi Murin",         "generation": 4, "group": "Justice", "affiliation": Affiliation.EN},
+    "cecilia_immergreen": {"char_name": "Cecilia Immergreen", "generation": 4, "group": "Justice", "affiliation": Affiliation.EN},
+    "raora_panthera":     {"char_name": "Raora Panthera",     "generation": 4, "group": "Justice", "affiliation": Affiliation.EN},
+    # ── ID 1기 ──────────────────────────────────
+    "airani_iofifteen":   {"char_name": "Airani Iofifteen", "generation": 1, "group": None, "affiliation": Affiliation.IND},
+    "moona_hoshinova":    {"char_name": "Moona Hoshinova",  "generation": 1, "group": None, "affiliation": Affiliation.IND},
+    "ayunda_risu":        {"char_name": "Ayunda Risu",      "generation": 1, "group": None, "affiliation": Affiliation.IND},
+    # ── ID 2기 ──────────────────────────────────
+    "kureiji_ollie":      {"char_name": "Kureiji Ollie",    "generation": 2, "group": None, "affiliation": Affiliation.IND},
+    "pavolia_reine":      {"char_name": "Pavolia Reine",    "generation": 2, "group": None, "affiliation": Affiliation.IND},
+    # ── ID 3기 ──────────────────────────────────
+    "vestia_zeta":        {"char_name": "Vestia Zeta",      "generation": 3, "group": None, "affiliation": Affiliation.IND},
+    "kaela_kovalskia":    {"char_name": "Kaela Kovalskia",  "generation": 3, "group": None, "affiliation": Affiliation.IND},
+    "kobo_kanaeru":       {"char_name": "Kobo Kanaeru",     "generation": 3, "group": None, "affiliation": Affiliation.IND},
     # ── others ──────────────────────────────────
-    "others":             {"char_name": "Others",                                  "cardinal": 0,  "affiliation": None},
+    "others":             {"char_name": "Others", "generation": None, "group": None, "affiliation": None},
 }
 
 
@@ -107,7 +141,8 @@ CHARACTER_META: dict[str, dict] = {
 
 class CharMeta(BaseModel):
     char_name: str
-    cardinal: int
+    generation: Optional[int]
+    group: Optional[str]
     affiliation: Optional[Affiliation]
 
 
