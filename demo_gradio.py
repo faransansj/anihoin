@@ -39,9 +39,31 @@ except ImportError:
 # 2. 로더 관련
 # ──────────────────────────────────────────────
 
+def _detect_device() -> tuple[torch.device, str]:
+    """(device, 사람이 읽기 좋은 설명 문자열) 반환"""
+    if hasattr(torch, "xpu") and torch.xpu.is_available():
+        dev = torch.device("xpu")
+        name = torch.xpu.get_device_name(0) if hasattr(torch.xpu, "get_device_name") else "Intel XPU"
+        label = f"Intel Arc GPU (XPU) — {name}"
+    elif torch.cuda.is_available():
+        dev = torch.device("cuda")
+        name = torch.cuda.get_device_name(0)
+        if torch.version.hip is not None:
+            label = f"AMD ROCm GPU — {name} (HIP {torch.version.hip})"
+        else:
+            label = f"NVIDIA CUDA GPU — {name} (CUDA {torch.version.cuda})"
+    elif torch.backends.mps.is_available():
+        dev = torch.device("mps")
+        label = "Apple Silicon GPU (MPS)"
+    else:
+        dev = torch.device("cpu")
+        label = "CPU"
+    return dev, label
+
+
 class DemoModelLoader:
     def __init__(self):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu"))
+        self.device, self.device_label = _detect_device()
         self.current_precision = None
         self.model = None
 
@@ -170,6 +192,7 @@ def process_image(img_path, precision):
 with gr.Blocks(title="HoloScope Classification UI") as demo:
     gr.Markdown("# 🔍 HoloScope Web Testing UI")
     gr.Markdown("Swin-Transformer Tiny 모델을 이용해 홀로라이브 캐릭터 이미지를 분류합니다.")
+    gr.Markdown(f"**Device** &nbsp;&nbsp;&nbsp;&nbsp; {loader.device_label}")
     
     with gr.Row():
         with gr.Column(scale=1):
