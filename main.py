@@ -276,7 +276,7 @@ def get_classes():
             {
                 "id": idx,
                 "character": char_key,
-                **CHARACTER_META.get(char_key, {"char_name": char_key, "cardinal": 0, "affiliation": None}),
+                **CHARACTER_META.get(char_key, {"char_name": char_key, "generation": None, "group": None, "affiliation": None}),
             }
             for idx, char_key in sorted(loader.idx_to_class.items())
         ],
@@ -297,7 +297,7 @@ async def predict(file: UploadFile = File(...)):
     char_key, confidence = ModelLoader.get().predict(img)
     meta_raw = CHARACTER_META.get(
         char_key,
-        {"char_name": char_key, "cardinal": 0, "affiliation": None},
+        {"char_name": char_key, "generation": None, "group": None, "affiliation": None},
     )
 
     return PredictResponse(
