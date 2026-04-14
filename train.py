@@ -239,6 +239,7 @@ def train(args):
         img_size=args.img_size,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
+        device_type=device.type,
     )
 
     num_classes = len(train_ds.classes)
@@ -356,7 +357,8 @@ def train(args):
         model, optimizer = ipex.optimize(model, optimizer=optimizer, dtype=dtype)
 
     p2_start = 1
-    if resume_phase == 2:
+    if resume_phase == 2 and ckpt is not None:
+        # 중단된 Phase 2 체크포인트에서 재개
         patience_counter = ckpt["patience_counter"]
         optimizer.load_state_dict(ckpt["optimizer_state"])
         scheduler.load_state_dict(ckpt["scheduler_state"])
@@ -364,7 +366,7 @@ def train(args):
             scaler.load_state_dict(ckpt["scaler_state"])
         p2_start = resume_epoch + 1
     else:
-        patience_counter = 0  # Phase 2 새로 시작 시 리셋
+        patience_counter = 0  # Phase 2 새로 시작 (--finetune 포함)
 
     if p2_start <= args.phase2_epochs:
         print(f"\n{'─'*40}")

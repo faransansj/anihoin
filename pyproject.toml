@@ -26,6 +26,8 @@ dependencies = [
     "onnxscript>=0.6.2",
     # 웹 UI
     "gradio>=4.0",
+    # Studio
+    "aiofiles>=23.0.0",
 ]
 
 [project.optional-dependencies]

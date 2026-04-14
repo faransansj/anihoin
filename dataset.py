@@ -163,6 +163,7 @@ def build_dataloaders(
     batch_size: int = 32,
     num_workers: int = 4,
     use_weighted_sampler: bool = True,
+    device_type: str = "cpu",
 ):
     """train/val/test DataLoader 한번에 생성"""
     train_ds = HoloDataset(root_dir, get_train_transforms(img_size), split="train")
@@ -178,18 +179,19 @@ def build_dataloaders(
         sampler = None
         shuffle = True
 
+    pin = (device_type == "cuda")
     train_loader = DataLoader(
         train_ds, batch_size=batch_size,
         sampler=sampler, shuffle=shuffle,
-        num_workers=num_workers, pin_memory=True,
+        num_workers=num_workers, pin_memory=pin,
     )
     val_loader = DataLoader(
         val_ds, batch_size=batch_size,
-        shuffle=False, num_workers=num_workers, pin_memory=True,
+        shuffle=False, num_workers=num_workers, pin_memory=pin,
     )
     test_loader = DataLoader(
         test_ds, batch_size=batch_size,
-        shuffle=False, num_workers=num_workers, pin_memory=True,
+        shuffle=False, num_workers=num_workers, pin_memory=pin,
     )
 
     return train_loader, val_loader, test_loader, train_ds
