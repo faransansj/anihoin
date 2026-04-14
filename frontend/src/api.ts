@@ -21,8 +21,9 @@ async function req<T>(
 
 export const api = {
   get:    <T>(path: string)              => req<T>("GET",    path),
-  post:   <T>(path: string, body?: unknown) => req<T>("POST",   path, body),
-  patch:  <T>(path: string, body?: unknown) => req<T>("PATCH",  path, body),
+   post:   <T>(path: string, body?: unknown) => req<T>("POST",   path, body),
+   put:    <T>(path: string, body?: unknown) => req<T>("PUT",    path, body),
+   patch:  <T>(path: string, body?: unknown) => req<T>("PATCH",  path, body),
   delete: <T>(path: string, body?: unknown) => req<T>("DELETE", path, body),
 
   /** multipart/form-data 업로드 */
