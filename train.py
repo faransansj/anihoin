@@ -8,7 +8,6 @@ Swin Transformer-Tiny 학습 스크립트
 - Intel Arc GPU (XPU) 지원 — IPEX 설치 시 자동 활성화
 """
 
-import os
 import json
 import argparse
 from pathlib import Path

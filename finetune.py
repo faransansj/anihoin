@@ -245,7 +245,7 @@ def main(args):
 
     print(f"\nFine-tune 완료! 최고 val_acc: {best_val_acc:.4f}")
     print(f"저장 위치: {ft_best_pth}")
-    print(f"\n※ 전체 62클래스 추론에 사용하려면 best_model.pth 를 교체하세요:")
+    print("\n※ 전체 62클래스 추론에 사용하려면 best_model.pth 를 교체하세요:")
     print(f"  cp {ft_best_pth} {save_dir}/best_model.pth")
 
 
