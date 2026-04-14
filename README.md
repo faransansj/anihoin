@@ -1,6 +1,8 @@
-# 🌟 HoloScope — Integrated Hololive Character Classifier
+# 🌟 any-hoin — Integrated Hololive Character Classifier
 
-HoloScope는 Swin Transformer-Tiny 기반의 홀로라이브 캐릭터 분류기로, 데이터 수집(Crawling), 모델 학습(Training), 그리고 추론 서비스(Inference)를 하나의 통합 웹 UI에서 관리할 수 있는 통합 플랫폼입니다.
+[English](README.en.md) | [日本語](README.ja.md) | [中文](README.zh.md)
+
+any-hoin은 Swin Transformer-Tiny 기반의 홀로라이브 캐릭터 분류기로, 데이터 수집(Crawling), 모델 학습(Training), 그리고 추론 서비스(Inference)를 하나의 통합 웹 UI에서 관리할 수 있는 통합 플랫폼입니다.
 
 ## 🚀 Quick Start
 
