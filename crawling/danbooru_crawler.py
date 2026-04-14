@@ -306,7 +306,14 @@ class DanbooruCrawler:
 
     # ── 전체 실행 ────────────────────────────
 
-    def run(self, min_images: int = 500, max_images: int = 1000) -> dict:
+    def run(
+        self,
+        min_images: int = 500,
+        max_images: int = 1000,
+        members: dict | None = None,
+    ) -> dict:
+        """members가 None이면 HOLOLIVE_MEMBERS 전체를 크롤."""
+        target = members if members is not None else HOLOLIVE_MEMBERS
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         auth_label = (
@@ -316,7 +323,7 @@ class DanbooruCrawler:
             Panel.fit(
                 f"[bold white]HoloScope Danbooru Crawler[/]\n"
                 f"계정 [dim]│[/] {auth_label}\n"
-                f"대상 [dim]│[/] [cyan]{len(HOLOLIVE_MEMBERS)}명[/]  "
+                f"대상 [dim]│[/] [cyan]{len(target)}명[/]  "
                 f"기준 [dim]│[/] [green]{min_images}[/]–[green]{max_images}[/]장  "
                 f"워커 [dim]│[/] [cyan]{self.workers}[/]개",
                 border_style="cyan",
@@ -341,10 +348,10 @@ class DanbooruCrawler:
         ) as progress:
             overall = progress.add_task(
                 f"[bold cyan]{'전체 진행':<26}[/]",
-                total=len(HOLOLIVE_MEMBERS),
+                total=len(target),
             )
 
-            for char_name, tag in HOLOLIVE_MEMBERS.items():
+            for char_name, tag in target.items():
                 task_id = progress.add_task(
                     f"[yellow]{char_name:<26}[/]",
                     total=max_images,
@@ -431,15 +438,15 @@ class DanbooruCrawler:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="홀로라이브 캐릭터 이미지 크롤러 (Danbooru SFW)",
+        description="Danbooru 이미지 크롤러 (SFW)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 예시:
-  python danbooru_crawler.py                         # 익명 실행 (rate limit 있음)
-  python danbooru_crawler.py -u USER -k KEY          # 인증 실행 (권장)
-  python danbooru_crawler.py --min-images 300        # 최소 기준 완화
-  python danbooru_crawler.py --max-images 2000       # 더 많이 수집
-  python danbooru_crawler.py --workers 8             # 병렬 다운로드 증가
+  python danbooru_crawler.py                          # 익명 실행 (Hololive 전체)
+  python danbooru_crawler.py -u USER -k KEY           # 인증 실행 (권장)
+  python danbooru_crawler.py --min-images 300         # 최소 기준 완화
+  python danbooru_crawler.py --tags-file tags.json    # 커스텀 캐릭터 크롤
+                                                      # tags.json = {"char": "tag", ...}
 
 자격증명은 .env 파일에 미리 설정해도 됩니다:
   DANBOORU_LOGIN=your_username
@@ -478,11 +485,36 @@ if __name__ == "__main__":
         type=int, default=4, metavar="N",
         help="병렬 다운로드 스레드 수 (기본: 4, 최대 권장: 8)",
     )
+    parser.add_argument(
+        "--members",
+        default="", metavar="KEYS",
+        help="크롤할 캐릭터 키 (쉼표 구분, 기본: 전체). Hololive 키만 지원.",
+    )
+    parser.add_argument(
+        "--tags-file",
+        default="", metavar="FILE",
+        help='커스텀 캐릭터 JSON 파일: {"key": "danbooru_tag", ...}. 지정 시 --members 무시.',
+    )
     args = parser.parse_args()
+
+    # 우선순위: --tags-file > --members > 전체(HOLOLIVE_MEMBERS)
+    if args.tags_file.strip():
+        import json as _json
+        with open(args.tags_file, encoding="utf-8") as _f:
+            members = _json.load(_f)   # {key: tag}
+        console.print(f"[cyan]커스텀 태그 파일 로드:[/] {len(members)}개 캐릭터")
+    elif args.members.strip():
+        keys    = {k.strip() for k in args.members.split(",") if k.strip()}
+        members = {k: v for k, v in HOLOLIVE_MEMBERS.items() if k in keys}
+        unknown = keys - set(HOLOLIVE_MEMBERS)
+        if unknown:
+            console.print(f"[yellow]경고: 알 수 없는 캐릭터 키 무시됨: {unknown}[/]")
+    else:
+        members = None  # Hololive 전체 크롤
 
     DanbooruCrawler(
         username=args.username,
         api_key=args.api_key,
         output_dir=Path(args.output_dir),
         workers=args.workers,
-    ).run(min_images=args.min_images, max_images=args.max_images)
+    ).run(min_images=args.min_images, max_images=args.max_images, members=members)
