@@ -1,208 +1,114 @@
-# HoloScope — Hololive Character Classifier
+# 🌟 HoloScope — Integrated Hololive Character Classifier
 
-Swin Transformer-Tiny 기반 홀로라이브 캐릭터 분류기
+HoloScope는 Swin Transformer-Tiny 기반의 홀로라이브 캐릭터 분류기로, 데이터 수집(Crawling), 모델 학습(Training), 그리고 추론 서비스(Inference)를 하나의 통합 웹 UI에서 관리할 수 있는 통합 플랫폼입니다.
 
-## 구조
+## 🚀 Quick Start
 
-```
-anihoin/
-├── crawling/
-│   └── danbooru_crawler.py  # danbooru SFW 이미지 크롤러
-├── pipeline/
-│   ├── run_pipeline.sh      # 전체 파이프라인 마스터 스크립트
-│   ├── release.sh           # GitHub Release 자동 생성
-│   └── README.md            # 파이프라인 사용 가이드
-├── dataset.py               # Dataset / Augmentation / DataLoader
-├── train.py                 # 2-phase fine-tuning 학습 스크립트
-├── main.py                  # FastAPI 추론 서버
-├── demo_gradio.py           # Gradio Web UI 데모
-├── demo/
-│   └── index.html           # 데모 페이지
-└── pyproject.toml
-```
+어떤 OS에서든 아래 명령어들을 순서대로 복사하여 붙여넣으세요.
 
-## 실행 순서
+### 1. 환경 준비 (공통)
+먼저 최신 파이썬 패키지 매니저인 `uv`를 설치합니다.
 
-### 0. 환경 설정
+**macOS / Linux**
 ```bash
-# uv 설치 (없는 경우)
 curl -LsSf https://astral.sh/uv/install.sh | sh
+source $HOME/.cargo/env
+```
 
-# 가상환경 생성 및 의존성 설치 (Python 3.11 자동 사용)
+**Windows (PowerShell)**
+```powershell
+powershell -ExecutionPolicy ByPass -Command "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+### 2. 프로젝트 설정 및 의존성 설치
+```bash
+# 저장소 클론 및 이동
+git clone https://github.com/faransansj/anihoin.git
+cd anihoin
+
+# 가상환경 생성 및 의존성 설치 (Python 3.11 자동 설정)
 uv sync
 
-# wandb 로깅까지 설치하는 경우
-uv sync --extra logging
-
-# Intel Arc GPU (XPU) 학습 지원
+# (옵션) Intel Arc GPU 사용자의 경우
 uv sync --extra arc
 ```
 
-> **Intel Arc 사용자** → [Intel Arc GPU 셋업 가이드](docs/intel_arc_setup.md) 참조
+### 3. 서비스 실행 (All-in-One)
 
-### 1. 크롤링
+HoloScope는 백엔드 API와 프론트엔드 UI로 구성되어 있습니다.
 
-#### 자격증명 설정 (권장)
+**Step A: 백엔드 서버 실행**
+```bash
+uv run python studio_api.py
+```
+> 서버가 실행되면 `http://localhost:8000`에서 API가 작동합니다.
 
-익명으로도 실행되지만, Danbooru 계정이 있으면 rate limit이 완화됩니다.
+**Step B: 프론트엔드 UI 실행**
+새 터미널을 열고 아래 명령어를 입력하세요.
+```bash
+cd frontend
+npm install
+npm run dev
+```
+> 이제 브라우저에서 `http://localhost:5173` (또는 터미널에 표시된 주소)로 접속하면 통합 관리 화면을 사용할 수 있습니다.
 
+---
+
+## 🛠 통합 웹 UI 주요 기능
+
+이제 개별 스크립트를 실행할 필요 없이 웹 UI에서 모든 과정을 제어할 수 있습니다.
+
+- **🌐 Crawl Page**: 단부루(Danbooru)에서 캐릭터별 이미지를 선택적으로 수집합니다.
+- **📚 Dataset Page**: 수집된 데이터셋의 상태를 확인하고 관리합니다.
+- **🏋️ Training Page**: 모델 학습을 시작하고, 실시간으로 학습 메트릭(Loss, Accuracy)을 차트로 확인합니다.
+- **🔮 Inference Page**: 이미지를 업로드하여 즉시 캐릭터를 분류하고 메타데이터를 확인합니다.
+- **💾 Export Page**: 학습된 모델과 설정 파일을 내보냅니다.
+
+---
+
+## 📂 프로젝트 구조 (최신)
+
+```text
+anihoin/
+├── studio/                 # 통합 백엔드 시스템
+│   ├── jobs/               # 비동기 작업 처리 (크롤링, 학습, 내보내기)
+│   │   ├── base_job.py     # 작업 기본 클래스
+│   │   ├── crawl_job.py    # 크롤링 작업 로직
+│   │   └── train_job.py    # 학습 작업 로직
+│   ├── routers/            # API 엔드포인트 (FastAPI)
+│   │   ├── characters.py   # 캐릭터 메타데이터 관리
+│   │   ├── crawl.py        # 크롤링 제어
+│   │   └── training.py     # 학습 제어
+│   └── characters.py       # 캐릭터 정의 및 데이터 모델
+├── frontend/               # React + TypeScript + Vite 기반 웹 UI
+│   ├── src/pages/          # 기능별 페이지 (Crawl, Training, Inference 등)
+│   └── src/store/          # Job 상태 관리 (Zustand)
+├── crawling/               # 핵심 크롤링 엔진 (danbooru_crawler.py)
+├── train.py                # 모델 학습 코어 엔진
+├── dataset.py              # 데이터셋 및 Augmentation 파이프라인
+└── studio_api.py           # 통합 API 서버 진입점
+```
+
+---
+
+## ⚙️ 세부 설정
+
+### 단부루 자격증명 설정
+크롤링 속도 제한(Rate Limit)을 피하기 위해 `.env` 파일 설정을 권장합니다.
 ```bash
 cp .env.example .env
 # .env 파일을 열어 DANBOORU_LOGIN, DANBOORU_API_KEY 입력
-# API 키는 https://danbooru.donmai.us/profile 에서 발급
 ```
 
-#### 실행
+## 📊 모델 정보
+- **Architecture**: Swin Transformer-Tiny
+- **Input Size**: 224 $\times$ 224 RGB
+- **Pretrained**: ImageNet-1K
+- **Key Feature**: ViT 계열의 높은 데이터 효율성과 전역 특징 포착 능력을 결합하여 적은 데이터로도 높은 분류 정확도를 달성합니다.
 
-```bash
-# 기본 실행 (.env 자동 로드)
-uv run python crawling/danbooru_crawler.py
+---
 
-# 직접 자격증명 전달
-uv run python crawling/danbooru_crawler.py -u YOUR_NAME -k YOUR_KEY
-
-# 주요 옵션
-uv run python crawling/danbooru_crawler.py \
-  --min-images 300 \
-  --max-images 2000 \
-  --workers 8 \
-  --output-dir ./dataset/raw
-```
-
-| 옵션 | 기본값 | 설명 |
-|------|--------|------|
-| `-u`, `--username` | `""` | Danbooru 사용자명 |
-| `-k`, `--api-key` | `""` | Danbooru API 키 |
-| `--min-images` | `500` | 미달 시 `others/`로 이동 |
-| `--max-images` | `1000` | 캐릭터당 상한 |
-| `--workers` | `4` | 병렬 다운로드 수 (최대 권장: 8) |
-| `--output-dir` | `./dataset/raw` | 저장 경로 |
-
-**결과 구조:**
-```
-dataset/raw/
-  houshou_marine/   ← min-images 이상 → 분류 대상
-  usada_pekora/
-  ...
-  others/           ← min-images 미만 캐릭터 자동 이동
-    himemori_luna/
-    ...
-```
-
-### 2. 학습
-```bash
-uv run python train.py \
-  --data-dir ./dataset/raw \
-  --save-dir ./checkpoints \
-  --batch-size 32 \
-  --phase1-epochs 5 \
-  --phase2-epochs 30 \
-  --phase2-lr 1e-5 \
-  --patience 7
-```
-
-| 옵션 | 기본값 | 설명 |
-|------|--------|------|
-| `--phase1-epochs` | `5` | Head-only 학습 epoch 수 |
-| `--phase2-epochs` | `30` | Full fine-tune epoch 수 |
-| `--phase2-lr` | `1e-5` | Phase 2 학습률 |
-| `--patience` | `7` | Early stopping patience (0=비활성화) |
-| `--xpu` | `false` | Intel Arc GPU(XPU) 강제 사용 (IPEX 필요) |
-| `--device` | `""` | 디바이스 직접 지정 (예: `xpu:0`, `cuda:1`) |
-| `--cpu` | `false` | CPU 강제 사용 |
-| `--no-amp` | `false` | Mixed Precision 비활성화 |
-| `--wandb` | `false` | WandB 로깅 활성화 |
-| `--wandb-project` | `holoscope` | WandB 프로젝트명 |
-
-**Phase 1** (5 epoch): classification head만 학습
-**Phase 2** (30 epoch): 전체 fine-tune, lr=1e-5, early stopping 적용
-
-학습 완료 후 `checkpoints/` 에 저장:
-- `best_model.pth` — 최고 val_acc 모델
-- `class_map.json` — idx → 캐릭터명 매핑
-- `config.json`    — 학습 설정 및 최종 성능
-
-### 3. API 서버 실행
-```bash
-uv run python main.py
-# http://localhost:8000 에서 서버 시작
-# http://localhost:8000/docs 에서 Swagger UI 확인
-```
-
-### 4. Web UI 데모 실행 (Gradio)
-```bash
-uv run python demo_gradio.py
-# http://localhost:7860 에서 브라우저 접속
-# FP32 / FP16 모델 전환 및 API Json을 함께 확인할 수 있습니다.
-```
-
-### 5. API 사용 예시
-
-```bash
-# 이미지 분류
-curl -X POST "http://localhost:8000/predict" \
-  -H "accept: application/json" \
-  -F "file=@marine.jpg"
-```
-
-**Response:**
-```json
-{
-  "file_name": "marine.jpg",
-  "confidence": 0.923,
-  "meta": {
-    "char_name": "Houshou Marine (宝鐘マリン)",
-    "cardinal": 19,
-    "affiliation": "JP"
-  }
-}
-```
-
-**필드 설명:**
-
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| `file_name` | string | 업로드된 파일명 |
-| `confidence` | float | top-1 예측 신뢰도 (0.0 ~ 1.0) |
-| `meta.char_name` | string | 캐릭터 표시명 |
-| `meta.cardinal` | int | 해당 지부 내 데뷔 순번 |
-| `meta.affiliation` | `JP` \| `EN` \| `IND` \| `null` | 소속 지부 |
-
-**엔드포인트 상세 목록:**
-
-| Method | Path | 설명 |
-|--------|------|------|
-| `POST` | `/predict` | 이미지 분류. 이미지 파일을 `file` 파라미터(multipart/form-data)로 업로드하면, 식별된 캐릭터 정보와 확률(Confidence)을 JSON으로 응답합니다. 상단 *Response* 예제 참조. |
-| `GET`  | `/classes` | 지원 캐릭터 전체 목록. 응답 JSON 구성:<br>`{ "total": 62, "classes": [ { "id": 0, "character": "houshou_marine", "char_name": "Houshou Marine", "cardinal": 19, "affiliation": "JP" }, ... ] }` |
-| `GET`  | `/health` | 서버 상태 및 현재 활성화된 모델 추론 디바이스 확인. 응답 JSON 구성:<br>`{ "status": "ok", "backend": "onnx+ROCMExecutionProvider" }` 등 |
-| `GET`  | `/docs` | OpenAPI 문서 형태의 Swagger UI 제공 |
-
-## 파이프라인 (v2, v3 신규 학습)
-
-새로운 데이터를 확보한 후 버전업 학습부터 배포까지 자동화하는 파이프라인을 제공합니다.
-
-```bash
-# 크롤링 후 전체 파이프라인 실행 (+ GitHub Release 자동 생성)
-bash pipeline/run_pipeline.sh --version v2.0.0 --release
-
-# 데이터 이미 있는 경우 크롤링 건너뜨다
-bash pipeline/run_pipeline.sh --version v2.0.0 --skip-crawl --release
-```
-
-상세 옵션 및 수동 릴리즈 방법은 [pipeline/README.md](pipeline/README.md) 참조.
-
-## 모델 선택 근거
-
-| 항목 | 내용 |
-|------|------|
-| 모델 | Swin Transformer-Tiny |
-| 입력 | 224×224 RGB |
-| 사전학습 | ImageNet-1K |
-| 파라미터 | ~28M |
-| 적합 이유 | ViT 계열 중 데이터 효율 ↑, CNN보다 전역 특징 포착 ↑ |
-
-## 주의사항
-
-- 학술/비상업 목적 데모
-- 홀로라이브 캐릭터 © Cover Corp.
-- danbooru 크롤링 시 이용약관 준수
+## ⚠️ 주의사항
+- 본 프로젝트는 학술 및 비상업적 목적의 데모입니다.
+- 모든 캐릭터의 저작권은 © Cover Corp.에 있습니다.
+- Danbooru 크롤링 시 해당 사이트의 이용약관을 준수하시기 바랍니다.
