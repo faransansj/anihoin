@@ -1,6 +1,6 @@
 # 🌟 any-hoin — Integrated Hololive Character Classifier
 
-[한국어](README.md) | [English](README.en.md) | [中文](README.zh.md)
+[한국어](README.kr.md) | [English](README.md) | [中文](README.zh.md)
 
 any-hoinはSwin Transformer-Tinyベースのホロライブキャラクター分類器であり、データ収集(Crawling)、モデル学習(Training)、および推論サービス(Inference)を一つの統合Web UIで管理できる統合プラットフォームです。
 
