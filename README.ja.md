@@ -1,0 +1,116 @@
+# 🌟 any-hoin — Integrated Hololive Character Classifier
+
+[한국어](README.md) | [English](README.en.md) | [中文](README.zh.md)
+
+any-hoinはSwin Transformer-Tinyベースのホロライブキャラクター分類器であり、データ収集(Crawling)、モデル学習(Training)、および推論サービス(Inference)を一つの統合Web UIで管理できる統合プラットフォームです。
+
+## 🚀 クイックスタート
+
+どのOSでも、以下のコマンドを順番にコピーして貼り付けてください。
+
+### 1. 環境準備 (共通)
+まず、最新のPythonパッケージマネージャーである `uv` をインストールします。
+
+**macOS / Linux**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source $HOME/.cargo/env
+```
+
+**Windows (PowerShell)**
+```powershell
+powershell -ExecutionPolicy ByPass -Command "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+### 2. プロジェクト設定および依存関係のインストール
+```bash
+# リポジトリのクローンおよびディレクトリ移動
+git clone https://github.com/faransansj/any-hoin.git
+cd any-hoin
+
+# 仮想環境の作成および依存関係のインストール (Python 3.11 自動設定)
+uv sync
+
+# (オプション) Intel Arc GPUユーザーの場合
+uv sync --extra arc
+```
+
+### 3. サービスの実行 (All-in-One)
+
+any-hoinはバックエンドAPIとフロントエンドUIで構成されています。
+
+**Step A: バックエンドサーバーの実行**
+```bash
+uv run python studio_api.py
+```
+> サーバーが起動すると、`http://localhost:8000` でAPIが動作します。
+
+**Step B: フロントエンドUIの実行**
+新しいターミナルを開き、以下のコマンドを入力してください。
+```bash
+cd frontend
+npm install
+npm run dev
+```
+> ブラウザで `http://localhost:5173` (またはターミナルに表示されたアドレス) にアクセスすると、統合管理画面を利用できます。
+
+---
+
+## 🛠 統合Web UI 主要機能
+
+個別のスクリプトを実行することなく、Web UIからすべてのプロセスを制御できます。
+
+- **🌐 Crawl Page**: Danbooruからキャラクター別に画像を限定的に収集します。
+- **📚 Dataset Page**: 収集されたデータセットの状態を確認し、管理します。
+- **🏋️ Training Page**: モデル学習を開始し、学習メトリクス(Loss, Accuracy)をリアルタイムにチャートで確認します。
+- **🔮 Inference Page**: 画像をアップロードして即座にキャラクターを分類し、メタデータを確認します。
+- **💾 Export Page**: 学習済みモデルと設定ファイルをエクスポートします。
+
+---
+
+## 📂 プロジェクト構造 (最新)
+
+```text
+any-hoin/
+├── studio/                 # 統合バックエンドシステム
+│   ├── jobs/               # 非同期タスク処理 (クローリング, 学習, エクスポート)
+│   │   ├── base_job.py     # タスク基本クラス
+│   │   ├── crawl_job.py    # クローリングタスクロジック
+│   │   └── train_job.py    # 学習タスクロジック
+│   ├── routers/            # APIエンドポイント (FastAPI)
+│   │   ├── characters.py   # キャラクターメタデータ管理
+│   │   ├── crawl.py        # クローリング制御
+│   │   └── training.py     # 学習制御
+│   └── characters.py       # キャラクター定義およびデータモデル
+├── frontend/               # React + TypeScript + ViteベースのWeb UI
+│   ├── src/pages/          # 機能別ページ (Crawl, Training, Inferenceなど)
+│   └── src/store/          # タスク状態管理 (Zustand)
+├── crawling/               # コアクローリングエンジン (danbooru_crawler.py)
+├── train.py                # モデル学習コアエンジン
+├── dataset.py              # データセットおよびAugmentationパイプライン
+└── studio_api.py           # 統合APIサーバーエントリーポイント
+```
+
+---
+
+## ⚙️ 詳細設定
+
+### Danbooru認証設定
+レートリミットを避けるため、`.env` ファイルの設定を推奨します。
+```bash
+cp .env.example .env
+# .envファイルを開き、DANBOORU_LOGIN, DANBOORU_API_KEYを入力
+```
+
+## 📊 モデル情報
+- **Architecture**: Swin Transformer-Tiny
+- **Input Size**: 224 $\times$ 224 RGB
+- **Pretrained**: ImageNet-1K
+- **Key Feature**: ViT系の高いデータ効率とグローバルな特徴抽出能力を組み合わせ、少ないデータでも高い分類精度を実現します。
+
+---
+
+## ⚠️ 注意事項
+- 本プロジェクトは学術および非商業目的のデモです。
+- すべてのキャラクターの著作権は © Cover Corp.に帰属します。
+- Danbooruクローリング時は、サイトの利用規約を遵守してください。
