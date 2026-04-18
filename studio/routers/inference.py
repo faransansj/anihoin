@@ -43,8 +43,11 @@ def model_info():
     config_path = CHECKPOINT_DIR / "config.json"
     config = {}
     if config_path.exists():
-        with open(config_path) as f:
-            config = json.load(f)
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
 
     return {
         "fp32_available": fp32,

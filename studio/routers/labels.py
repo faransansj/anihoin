@@ -37,11 +37,17 @@ def list_labels():
     return {"labels": labels}
 
 
+def _guard_name(name: str):
+    if any(c in name for c in "/\\.") or name.startswith("."):
+        raise HTTPException(400, "Invalid label name")
+
+
 @router.post("")
 def create_label(body: dict):
     name = (body.get("name") or "").strip()
     if not name:
         raise HTTPException(400, "name is required")
+    _guard_name(name)
     path = DATASET_DIR / name
     if path.exists():
         raise HTTPException(409, f"'{name}' already exists")
@@ -54,6 +60,7 @@ def rename_label(name: str, body: dict):
     new_name = (body.get("name") or "").strip()
     if not new_name:
         raise HTTPException(400, "new name is required")
+    _guard_name(new_name)
     src = DATASET_DIR / name
     dst = DATASET_DIR / new_name
     if not src.exists():

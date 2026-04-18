@@ -9,7 +9,7 @@ import { api } from "../api";
 import JobConsole from "../components/JobConsole";
 import StatusBadge from "../components/StatusBadge";
 import { useJobStore } from "../store/jobStore";
-import type { JobState, ModelMap } from "../types";
+import type { ExportStatus, ModelMap } from "../types";
 
 export default function Export() {
   const { fp16State, onnxState, setFp16State, setOnnxState } = useJobStore();
@@ -24,7 +24,7 @@ export default function Export() {
 
   useEffect(() => {
     loadModels();
-    api.get<{ fp16: { state: JobState }; onnx: { state: JobState } }>("/export/status")
+    api.get<ExportStatus>("/export/status")
       .then((r) => { setFp16State(r.fp16.state); setOnnxState(r.onnx.state); })
       .catch(console.error);
   }, []);

@@ -83,6 +83,8 @@ async def upload_images(
         ext = Path(f.filename or "").suffix.lower()
         if ext not in ALLOWED_EXT:
             continue
+        if not f.content_type or not f.content_type.startswith("image/"):
+            continue
         content  = await f.read()
         md5      = hashlib.md5(content).hexdigest()
         dst_path = label_dir / f"{md5}{ext}"
@@ -152,9 +154,12 @@ def get_thumb(label: str, filename: str):
 
     if not thumb.exists():
         thumb.parent.mkdir(parents=True, exist_ok=True)
-        img = Image.open(src).convert("RGB")
-        img.thumbnail(THUMB_SIZE, Image.LANCZOS)
-        img.save(str(thumb), "JPEG", quality=80)
+        try:
+            img = Image.open(src).convert("RGB")
+            img.thumbnail(THUMB_SIZE, Image.LANCZOS)
+            img.save(str(thumb), "JPEG", quality=80)
+        except Exception:
+            raise HTTPException(400, "Corrupted or unreadable image")
 
     return FileResponse(str(thumb), media_type="image/jpeg")
 

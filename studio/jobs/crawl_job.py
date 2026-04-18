@@ -16,6 +16,7 @@ class CrawlJob(BaseJob):
     async def start(self, params: dict, project_root: str):
         if self.state == "running":
             return
+        self.state = "running"
 
         # 이전 임시 파일 정리
         self._cleanup_tmp()

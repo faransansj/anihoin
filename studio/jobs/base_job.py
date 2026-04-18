@@ -71,7 +71,8 @@ class BaseJob:
             cwd=cwd,
         )
 
-        assert self._proc.stdout
+        if not self._proc.stdout:
+            raise RuntimeError("Failed to open subprocess stdout")
         async for raw in self._proc.stdout:
             line = raw.decode("utf-8", errors="replace").rstrip()
             self._log_buffer.append(line)
@@ -81,9 +82,10 @@ class BaseJob:
             await self._on_line(line)
 
         await self._proc.wait()
-        self.state = "done" if self._proc.returncode == 0 else "failed"
+        final_state: JobState = "done" if self._proc.returncode == 0 else "failed"
         self._proc = None
-        await self._broadcast({"type": "state", "data": self.state})
+        self.state = final_state
+        await self._broadcast({"type": "state", "data": final_state})
 
     async def _on_line(self, line: str):
         """서브클래스에서 오버라이드해 구조화 이벤트 파싱."""
@@ -92,8 +94,12 @@ class BaseJob:
     async def stop(self):
         if self._proc and self.state == "running":
             self._proc.terminate()
-            self.state = "idle"
+            try:
+                await asyncio.wait_for(self._proc.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                self._proc.kill()
             self._proc = None
+            self.state = "idle"
             await self._broadcast({"type": "state", "data": "idle"})
         if self._task and not self._task.done():
             self._task.cancel()
