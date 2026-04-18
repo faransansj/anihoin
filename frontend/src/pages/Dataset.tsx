@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { api } from "../api";
+import ImageModal from "../components/ImageModal";
 import type { ImageItem, Label } from "../types";
 
 export default function Dataset() {
@@ -15,6 +16,7 @@ export default function Dataset() {
   const [totalImages,  setTotalImages]  = useState(0);
   const [page,         setPage]         = useState(1);
   const [selected,     setSelected]     = useState<Set<string>>(new Set());
+  const [previewImg,    setPreviewImg]    = useState<ImageItem | null>(null);
   const [newLabelName, setNewLabelName] = useState("");
   const [moveTarget,   setMoveTarget]   = useState("");
   const [loading,      setLoading]      = useState(false);
@@ -218,13 +220,14 @@ export default function Dataset() {
               {images.map((img) => {
                 const sel = selected.has(img.id);
                 return (
-                  <div
-                    key={img.id}
-                    onClick={() => toggleImage(img.id)}
-                    className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${
-                      sel ? "border-brand-500 scale-95" : "border-transparent hover:border-gray-600"
-                    }`}
-                  >
+                     <div
+                       key={img.id}
+                       onClick={() => toggleImage(img.id)}
+                       onDoubleClick={() => setPreviewImg(img)}
+                       className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${
+                         sel ? "border-brand-500 scale-95" : "border-transparent hover:border-gray-600"
+                       }`}
+                     >
                     <img
                       src={img.thumbnail}
                       alt={img.name}
@@ -251,9 +254,16 @@ export default function Dataset() {
             <span className="text-xs text-gray-400">{page} / {totalPages}</span>
             <button onClick={() => loadImages(activeLabel!, page + 1)} disabled={page >= totalPages}
               className="btn-ghost text-xs py-1 px-3">다음</button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+           </div>
+         )}
+       </div>
+     </div>
+     {previewImg && (
+       <ImageModal 
+         src={previewImg.thumbnail} 
+         alt={previewImg.name} 
+         onClose={() => setPreviewImg(null)} 
+       />
+     )}
+   );
+ }
