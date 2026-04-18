@@ -50,6 +50,11 @@ arc = [
 ]
 logging = ["wandb>=0.16.0"]
 
+[tool.uv]
+conflicts = [
+    [{ extra = "cuda" }, { extra = "rocm" }, { extra = "arc" }],
+]
+
 [tool.uv.sources]
 # torch / torchvision: extra에 따라 다른 인덱스에서 설치
 torch = [
