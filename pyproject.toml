@@ -11,10 +11,9 @@ dependencies = [
     "rich>=13.7.0",
     "python-dotenv>=1.0.0",
     "pytest>=8.0.0",
-    # 학습
+    # 학습 (기본: CPU / CUDA — GPU 별 빌드는 extra로 선택)
     "torch>=2.1.0",
     "torchvision>=0.16.0",
-    "triton-rocm==3.6.0 ; sys_platform == 'linux'",
     "timm>=0.9.12",
     "albumentations>=1.3.1",
     "numpy>=1.24.0",
@@ -22,7 +21,7 @@ dependencies = [
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",
     "python-multipart>=0.0.9",
-    # 추론 엔진 (CPU EP 기본 포함)
+    # 추론 엔진
     "onnxruntime>=1.17.0",
     "onnxscript>=0.6.2",
     # 웹 UI
@@ -32,35 +31,41 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-logging = ["wandb>=0.16.0"]
-# Intel Arc GPU 학습 지원
-# 설치: uv sync --extra arc
-arc = [
-    "intel-extension-for-pytorch>=2.3.0",
-    "oneccl-bind-pt>=2.3.0",
+# GPU 백엔드 — 하나만 선택해서 설치
+# uv sync --extra cuda    (NVIDIA, 기본 PyPI CUDA 빌드)
+# uv sync --extra rocm    (AMD,    ROCm 빌드)
+# uv sync --extra arc     (Intel Arc, XPU 빌드 + IPEX)
+cuda = []
+rocm = [
+    "triton-rocm==3.6.0 ; sys_platform == 'linux'",
 ]
-# ROCm GPU 추론: onnxruntime 대신 onnxruntime-rocm 설치
-# pip install onnxruntime-rocm  (onnxruntime과 충돌하므로 단독 사용)
-# 실행 시: HSA_OVERRIDE_GFX_VERSION=11.0.0 uv run python main.py
+arc = [
+    "intel-extension-for-pytorch",
+    "oneccl-bind-pt",
+]
+logging = ["wandb>=0.16.0"]
 
 [tool.uv.sources]
+# torch / torchvision: extra에 따라 다른 인덱스에서 설치
 torch = [
-    { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-rocm", extra = "rocm",  marker = "sys_platform == 'linux'" },
+    { index = "pytorch-ipex", extra = "arc",   marker = "sys_platform == 'linux'" },
+    # cuda / 기본: PyPI CUDA 빌드 (별도 지정 없음)
 ]
 torchvision = [
-    { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-rocm", extra = "rocm",  marker = "sys_platform == 'linux'" },
+    { index = "pytorch-ipex", extra = "arc",   marker = "sys_platform == 'linux'" },
 ]
-triton-rocm = { index = "pytorch-rocm" }
-# Intel Arc XPU 전용 패키지
+triton-rocm                 = { index = "pytorch-rocm" }
 intel-extension-for-pytorch = { index = "pytorch-ipex" }
-oneccl-bind-pt = { index = "pytorch-ipex" }
+oneccl-bind-pt              = { index = "pytorch-ipex" }
 
 [[tool.uv.index]]
 name = "pytorch-rocm"
-url = "https://download.pytorch.org/whl/rocm7.1"
+url  = "https://download.pytorch.org/whl/rocm7.1"
 explicit = true
 
 [[tool.uv.index]]
 name = "pytorch-ipex"
-url = "https://pytorch-extension.intel.com/release-whl/stable/xpu/us/"
+url  = "https://pytorch-extension.intel.com/release-whl/stable/xpu/us/"
 explicit = true
