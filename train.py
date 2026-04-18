@@ -16,7 +16,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR
 import timm
 from tqdm import tqdm
 
@@ -118,23 +118,36 @@ def unfreeze_all(model: nn.Module):
 # ──────────────────────────────────────────────
 
 
-def train_epoch(model, loader, criterion, optimizer, device, scaler, use_amp):
+def train_epoch(
+    model, loader, criterion, optimizer, device, scaler, use_amp, accumulation_steps=1
+):
     model.train()
     total_loss, correct, total = 0.0, 0, 0
+    optimizer.zero_grad(set_to_none=True)
 
-    for imgs, labels in tqdm(loader, desc="  train", leave=False):
+    for i, (imgs, labels) in enumerate(tqdm(loader, desc="  train", leave=False)):
         imgs, labels = imgs.to(device), labels.to(device)
-        optimizer.zero_grad(set_to_none=True)
 
         with torch.amp.autocast(device_type=device.type, enabled=use_amp):
             outputs = model(imgs)
             loss = criterion(outputs, labels)
+            loss = loss / accumulation_steps
 
         scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
 
-        total_loss += loss.item() * imgs.size(0)
+        if (i + 1) % accumulation_steps == 0 or (i + 1) == len(loader):
+            # Gradient Clipping 추가
+            if use_amp:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            else:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad(set_to_none=True)
+
+        total_loss += loss.item() * accumulation_steps * imgs.size(0)
         correct += (outputs.argmax(1) == labels).sum().item()
         total += imgs.size(0)
 
@@ -241,6 +254,13 @@ def train(args):
     )
     # AMP: CUDA/XPU만 활성화. MPS/CPU는 AMP 미지원
     use_amp = device.type in ("cuda", "xpu") and not args.no_amp
+    if device.type == "mps" and not args.no_amp:
+        print(
+            "⚠️  주의: Apple Silicon MPS는 현재 torch.amp.autocast를 공식 지원하지 않습니다."
+        )
+        print("   - 기본적으로 FP32로 학습하며, AMP 관련 최적화는 적용되지 않습니다.")
+        print("   - 더 빠른 학습을 원하시면 가급적 CUDA/XPU 환경을 권장합니다.")
+
     print(
         f"Device: {device} | AMP: {use_amp}"
         + (" | IPEX" if (IPEX_AVAILABLE and device.type == "xpu") else "")
@@ -346,7 +366,14 @@ def train(args):
 
         for epoch in range(p1_start, args.phase1_epochs + 1):
             train_loss, train_acc = train_epoch(
-                model, train_loader, criterion, optimizer, device, scaler, use_amp
+                model,
+                train_loader,
+                criterion,
+                optimizer,
+                device,
+                scaler,
+                use_amp,
+                accumulation_steps=args.accumulation_steps,
             )
             val_loss, val_acc = val_epoch(model, val_loader, criterion, device, use_amp)
             scheduler.step()
@@ -409,11 +436,26 @@ def train(args):
 
     # ────────────────────────────────
     # Phase 2: 전체 fine-tune
-    # ────────────────────────────────
     unfreeze_all(model)
 
     optimizer = optim.AdamW(model.parameters(), lr=args.phase2_lr, weight_decay=1e-4)
-    scheduler = CosineAnnealingLR(optimizer, T_max=args.phase2_epochs)
+
+    # LR Warmup 설정: 2 epoch 동안 phase2_lr까지 점진적으로 증가
+    warmup_epochs = 2
+    warmup_scheduler = LinearLR(
+        optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_epochs
+    )
+    main_scheduler = CosineAnnealingLR(
+        optimizer, T_max=args.phase2_epochs - warmup_epochs
+    )
+
+    # SequentialLR를 사용하여 Warmup 후 CosineAnnealing 적용
+    scheduler = torch.optim.lr_scheduler.SequentialLR(
+        optimizer,
+        schedulers=[warmup_scheduler, main_scheduler],
+        milestones=[warmup_epochs],
+    )
+
     if _use_ipex:
         dtype = torch.bfloat16 if use_amp else torch.float32
         model, optimizer = ipex.optimize(model, optimizer=optimizer, dtype=dtype)
@@ -439,7 +481,14 @@ def train(args):
 
     for epoch in range(p2_start, args.phase2_epochs + 1):
         train_loss, train_acc = train_epoch(
-            model, train_loader, criterion, optimizer, device, scaler, use_amp
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            device,
+            scaler,
+            use_amp,
+            accumulation_steps=args.accumulation_steps,
         )
         val_loss, val_acc = val_epoch(model, val_loader, criterion, device, use_amp)
         scheduler.step()
@@ -575,7 +624,12 @@ if __name__ == "__main__":
     )
     parser.add_argument("--wandb", action="store_true", help="WandB 로깅 활성화")
     parser.add_argument("--wandb-project", default="holoscope")
-    parser.add_argument("--wandb-run", default=None)
+    parser.add_argument(
+        "--accumulation-steps",
+        type=int,
+        default=1,
+        help="Number of steps to accumulate gradients before updating",
+    )
     args = parser.parse_args()
 
     train(args)
