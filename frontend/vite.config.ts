@@ -9,7 +9,10 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:8001",
         changeOrigin: true,
-        ws: true,           // WebSocket 프록시
+        ws: true,
+        configure: (proxy) => {
+          proxy.on("error", () => {}); // ECONNRESET 노이즈 억제
+        },
       },
     },
   },

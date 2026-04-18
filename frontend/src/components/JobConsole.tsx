@@ -28,31 +28,48 @@ export default function JobConsole({
   const wsRef     = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    setLines([]);          // 재연결 시 중복 방지
-    const ws = api.ws(jobPath);
-    wsRef.current = ws;
+    let ws: WebSocket;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let dead = false;
 
-    ws.onmessage = (ev) => {
-      try {
-        const msg = JSON.parse(ev.data as string);
-        if (msg.type === "log") {
-          setLines((prev) => {
-            const next = [...prev, msg.data as string];
-            return next.length > maxLines ? next.slice(-maxLines) : next;
-          });
-        } else if (msg.type === "state" && onState) {
-          onState(msg.data as JobState);
-        } else if (msg.type === "metric" && onMetric) {
-          onMetric(msg.data as TrainMetric);
-        } else if (msg.type === "progress" && onProgress) {
-          onProgress(msg.data as TrainProgress);
+    function connect() {
+      if (dead) return;
+      ws = api.ws(jobPath);
+      wsRef.current = ws;
+
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data as string);
+          if (msg.type === "log") {
+            setLines((prev) => {
+              const next = [...prev, msg.data as string];
+              return next.length > maxLines ? next.slice(-maxLines) : next;
+            });
+          } else if (msg.type === "state" && onState) {
+            onState(msg.data as JobState);
+          } else if (msg.type === "metric" && onMetric) {
+            onMetric(msg.data as TrainMetric);
+          } else if (msg.type === "progress" && onProgress) {
+            onProgress(msg.data as TrainProgress);
+          }
+        } catch {
+          /* 무시 */
         }
-      } catch {
-        /* 무시 */
-      }
-    };
+      };
 
-    return () => ws.close();
+      ws.onclose = () => {
+        if (!dead) retryTimer = setTimeout(connect, 2000);
+      };
+    }
+
+    setLines([]);
+    connect();
+
+    return () => {
+      dead = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      ws?.close();
+    };
   }, [jobPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 자동 스크롤
