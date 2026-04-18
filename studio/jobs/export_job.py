@@ -11,6 +11,7 @@ class Fp16Job(BaseJob):
     async def start(self, project_root: str):
         if self.state == "running":
             return
+        self.state = "running"
         cmd = ["uv", "run", "python", "quantize_fp16.py"]
         self._task = asyncio.create_task(self._run(cmd, cwd=project_root))
 
@@ -22,5 +23,6 @@ class OnnxJob(BaseJob):
     async def start(self, opset: int, project_root: str):
         if self.state == "running":
             return
+        self.state = "running"
         cmd = ["uv", "run", "python", "export_onnx.py", "--opset", str(opset)]
         self._task = asyncio.create_task(self._run(cmd, cwd=project_root))

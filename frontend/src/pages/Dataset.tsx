@@ -120,6 +120,7 @@ export default function Dataset() {
   const totalPages = Math.ceil(totalImages / PER_PAGE);
 
   return (
+    <>
     <div className="flex h-full" {...getRootProps()}>
       <input {...getInputProps()} />
 
@@ -259,11 +260,12 @@ export default function Dataset() {
        </div>
      </div>
      {previewImg && (
-       <ImageModal 
-         src={previewImg.thumbnail} 
-         alt={previewImg.name} 
-         onClose={() => setPreviewImg(null)} 
+       <ImageModal
+         src={previewImg.thumbnail}
+         alt={previewImg.name}
+         onClose={() => setPreviewImg(null)}
        />
      )}
+    </>
    );
  }

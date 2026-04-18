@@ -51,6 +51,17 @@ export interface TrainProgress {
   speed_it_s:  number;   // batches/sec
 }
 
+// ── 잡 상태 ────────────────────────────────────────────
+export interface JobStatus {
+  name:  string;
+  state: JobState;
+}
+
+export interface ExportStatus {
+  fp16: JobStatus;
+  onnx: JobStatus;
+}
+
 // ── 모델 정보 ───────────────────────────────────────────
 export interface ModelEntry {
   exists:   boolean;

@@ -41,6 +41,7 @@ class TrainJob(BaseJob):
     async def start(self, params: dict, project_root: str):
         if self.state == "running":
             return
+        self.state = "running"
 
         self.phase1_epochs = int(params.get("phase1_epochs", 5))
         self.phase2_epochs = int(params.get("phase2_epochs", 30))
