@@ -33,7 +33,7 @@ try:
     import intel_extension_for_pytorch as ipex  # Intel Arc XPU 지원
 
     IPEX_AVAILABLE = True
-except ImportError:
+except Exception:
     IPEX_AVAILABLE = False
 
 
