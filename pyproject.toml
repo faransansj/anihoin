@@ -11,9 +11,7 @@ dependencies = [
     "rich>=13.7.0",
     "python-dotenv>=1.0.0",
     "pytest>=8.0.0",
-    # 학습 (기본: CPU / CUDA — GPU 별 빌드는 extra로 선택)
-    "torch>=2.1.0",
-    "torchvision>=0.16.0",
+    # 학습 (torch는 --extra cuda/rocm/arc 중 하나로 설치)
     "timm>=0.9.12",
     "albumentations>=1.3.1",
     "numpy>=1.24.0",
@@ -35,11 +33,18 @@ dependencies = [
 # uv sync --extra cuda    (NVIDIA, 기본 PyPI CUDA 빌드)
 # uv sync --extra rocm    (AMD,    ROCm 빌드)
 # uv sync --extra arc     (Intel Arc, XPU 빌드 + IPEX)
-cuda = []
+cuda = [
+    "torch>=2.1.0",
+    "torchvision>=0.16.0",
+]
 rocm = [
+    "torch>=2.1.0",
+    "torchvision>=0.16.0",
     "triton-rocm==3.6.0 ; sys_platform == 'linux'",
 ]
 arc = [
+    "torch>=2.1.0",
+    "torchvision>=0.16.0",
     "intel-extension-for-pytorch",
     "oneccl-bind-pt",
 ]
