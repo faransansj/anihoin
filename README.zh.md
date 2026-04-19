@@ -39,24 +39,27 @@ uv sync --extra arc    # Intel Arc GPU (XPU)
 
 > **Intel Arc 用户注意**: 执行 `uv sync --extra arc` 后，请使用 `.venv/bin/python` 或 `uv run --extra arc python` 运行脚本，而非直接使用 `uv run python`。不带 `--extra arc` 运行时，uv 可能会重新安装 CUDA 版 PyTorch，导致 XPU 支持失效。
 
-### 3. 服务运行 (All-in-One)
+### 3. 启动 (一键)
 
-any-hoin 由后端 API 和前端 UI 组成。
-
-**步骤 A: 运行后端服务器**
 ```bash
-uv run python studio_api.py
+./start.sh
 ```
-> 服务器启动后，API 将在 `http://localhost:8001` 运行。
 
-**步骤 B: 运行前端 UI**
-打开一个新终端并输入以下命令。
+同时启动后端 (`http://localhost:8001`) 和前端 (`http://localhost:5173`)。按 `Ctrl+C` 一次性关闭所有服务。
+
+<details>
+<summary>手动启动 (如有需要)</summary>
+
+**后端**
 ```bash
-cd frontend
-npm install
-npm run dev
+.venv/bin/python studio_api.py
 ```
-> 现在，在浏览器中访问 `http://localhost:5173` (或终端显示的地址) 即可使用集成管理界面。
+
+**前端** (新终端)
+```bash
+cd frontend && npm install && npm run dev
+```
+</details>
 
 ---
 
