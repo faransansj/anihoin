@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import sys
 import tempfile
 
 from .base_job import BaseJob
@@ -21,7 +22,7 @@ class CrawlJob(BaseJob):
         # 이전 임시 파일 정리
         self._cleanup_tmp()
 
-        cmd = ["uv", "run", "python", "crawling/danbooru_crawler.py"]
+        cmd = [sys.executable, "crawling/danbooru_crawler.py"]
 
         if params.get("username"):
             cmd += ["-u", params["username"]]

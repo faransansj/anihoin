@@ -31,9 +31,13 @@ cd any-hoin
 # 创建虚拟环境并安装依赖 (自动设置 Python 3.11)
 uv sync
 
-# (可选) Intel Arc GPU 用户
-uv sync --extra arc
+# (可选) GPU 后端 — 根据硬件选择其中一个
+uv sync --extra cuda   # NVIDIA GPU
+uv sync --extra rocm   # AMD GPU
+uv sync --extra arc    # Intel Arc GPU (XPU)
 ```
+
+> **Intel Arc 用户注意**: 执行 `uv sync --extra arc` 后，请使用 `.venv/bin/python` 或 `uv run --extra arc python` 运行脚本，而非直接使用 `uv run python`。不带 `--extra arc` 运行时，uv 可能会重新安装 CUDA 版 PyTorch，导致 XPU 支持失效。
 
 ### 3. 服务运行 (All-in-One)
 
@@ -43,7 +47,7 @@ any-hoin 由后端 API 和前端 UI 组成。
 ```bash
 uv run python studio_api.py
 ```
-> 服务器启动后，API 将在 `http://localhost:8000` 运行。
+> 服务器启动后，API 将在 `http://localhost:8001` 运行。
 
 **步骤 B: 运行前端 UI**
 打开一个新终端并输入以下命令。
