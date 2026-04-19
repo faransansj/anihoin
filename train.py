@@ -70,6 +70,18 @@ except Exception:
 # ──────────────────────────────────────────────
 
 
+def _xpu_ready() -> bool:
+    """XPU 빌드(+xpu)이고 하드웨어가 실제로 존재하는지 확인.
+    CUDA 빌드에서도 Intel 드라이버가 있으면 is_available()이 True를 반환하지만
+    실제 XPU 연산은 불가능하므로 버전 문자열로 빌드 종류를 먼저 검증한다."""
+    if "+xpu" not in torch.__version__:
+        return False
+    try:
+        return torch.xpu.is_available()
+    except Exception:
+        return False
+
+
 def detect_device(
     force_xpu: bool = False, force_cpu: bool = False, device_str: str = ""
 ) -> torch.device:
@@ -79,7 +91,7 @@ def detect_device(
     if device_str:
         return torch.device(device_str)
     if force_xpu:
-        if torch.xpu.is_available():
+        if _xpu_ready():
             return torch.device("xpu")
         raise RuntimeError(
             "--xpu 플래그를 지정했지만 Intel Arc XPU를 사용할 수 없습니다.\n"
@@ -87,7 +99,7 @@ def detect_device(
             "  2) Intel GPU 드라이버 설치 확인\n"
             "  3) docs/intel_arc_setup.md 참조"
         )
-    if torch.xpu.is_available():
+    if _xpu_ready():
         return torch.device("xpu")
     if torch.cuda.is_available():
         return torch.device("cuda")
