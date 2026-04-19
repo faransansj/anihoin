@@ -1,19 +1,23 @@
-"""ExportJob — quantize_fp16.py / export_onnx.py subprocess 래퍼."""
+"""ExportJob — quantize.py / export_onnx.py subprocess 래퍼."""
 
 import asyncio
 import sys
 from .base_job import BaseJob
 
+QUANT_FORMATS = ("fp16", "int8", "int4", "int2")
 
-class Fp16Job(BaseJob):
+
+class QuantJob(BaseJob):
     def __init__(self):
-        super().__init__("fp16")
+        super().__init__("quant")
 
-    async def start(self, project_root: str):
+    async def start(self, fmt: str, project_root: str):
+        if fmt not in QUANT_FORMATS:
+            raise ValueError(f"Unknown format: {fmt}")
         if self.state == "running":
             return
         self.state = "running"
-        cmd = [sys.executable, "quantize_fp16.py"]
+        cmd = [sys.executable, "quantize.py", "--format", fmt]
         self._task = asyncio.create_task(self._run(cmd, cwd=project_root))
 
 
