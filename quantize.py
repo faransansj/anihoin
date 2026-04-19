@@ -11,7 +11,12 @@ import argparse
 import copy
 import json
 import os
+import sys
 from pathlib import Path
+
+# triton-xpu 가 triton.language 등 서브 API 를 구현하지 않아
+# torch._dynamo import 시 AttributeError 가 발생한다. None 으로 마스킹.
+sys.modules.setdefault("triton", None)  # type: ignore[arg-type]
 
 import timm
 import torch
@@ -54,9 +59,12 @@ def _quant_fp16(model: nn.Module) -> None:
 
 def _quant_int8(model: nn.Module) -> dict:
     """torch.quantization.quantize_dynamic — Linear 레이어 INT8 동적 양자화."""
-    qmodel = torch.quantization.quantize_dynamic(
-        copy.deepcopy(model), {nn.Linear}, dtype=torch.qint8
-    )
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        qmodel = torch.quantization.quantize_dynamic(
+            copy.deepcopy(model), {nn.Linear}, dtype=torch.qint8
+        )
     return {"format": "int8", "model": qmodel.state_dict()}
 
 
