@@ -39,24 +39,27 @@ uv sync --extra arc    # Intel Arc GPU (XPU)
 
 > **Intel Arc users**: After `uv sync --extra arc`, run scripts with `.venv/bin/python` or `uv run --extra arc python` instead of bare `uv run python`. Running without `--extra arc` can cause uv to reinstall the CUDA build of PyTorch and break XPU support.
 
-### 3. Service Execution (All-in-One)
+### 3. Start (One-Shot)
 
-any-hoin consists of a backend API and a frontend UI.
-
-**Step A: Run Backend Server**
 ```bash
-uv run python studio_api.py
+./start.sh
 ```
-> Once the server is running, the API will be available at `http://localhost:8001`.
 
-**Step B: Run Frontend UI**
-Open a new terminal and enter the following commands.
+This single command starts both the backend (`http://localhost:8001`) and frontend (`http://localhost:5173`). Press `Ctrl+C` to stop everything at once.
+
+<details>
+<summary>Manual startup (if needed)</summary>
+
+**Backend**
 ```bash
-cd frontend
-npm install
-npm run dev
+.venv/bin/python studio_api.py
 ```
-> Now, access `http://localhost:5173` (or the address displayed in the terminal) in your browser to use the integrated management screen.
+
+**Frontend** (new terminal)
+```bash
+cd frontend && npm install && npm run dev
+```
+</details>
 
 ---
 

@@ -39,24 +39,27 @@ uv sync --extra arc    # Intel Arc GPU (XPU)
 
 > **Intel Arcユーザーへ**: `uv sync --extra arc` 後、スクリプト実行には `uv run python` ではなく `.venv/bin/python` または `uv run --extra arc python` を使用してください。`--extra arc` なしで実行すると、uvがCUDAビルドのPyTorchを再インストールしてXPUサポートが壊れる場合があります。
 
-### 3. サービスの実行 (All-in-One)
+### 3. 起動 (ワンショット)
 
-any-hoinはバックエンドAPIとフロントエンドUIで構成されています。
-
-**Step A: バックエンドサーバーの実行**
 ```bash
-uv run python studio_api.py
+./start.sh
 ```
-> サーバーが起動すると、`http://localhost:8001` でAPIが動作します。
 
-**Step B: フロントエンドUIの実行**
-新しいターミナルを開き、以下のコマンドを入力してください。
+バックエンド (`http://localhost:8001`) とフロントエンド (`http://localhost:5173`) を一度に起動します。`Ctrl+C` で全終了。
+
+<details>
+<summary>手動起動 (必要な場合)</summary>
+
+**バックエンド**
 ```bash
-cd frontend
-npm install
-npm run dev
+.venv/bin/python studio_api.py
 ```
-> ブラウザで `http://localhost:5173` (またはターミナルに表示されたアドレス) にアクセスすると、統合管理画面を利用できます。
+
+**フロントエンド** (新しいターミナル)
+```bash
+cd frontend && npm install && npm run dev
+```
+</details>
 
 ---
 
