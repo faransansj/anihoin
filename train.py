@@ -9,9 +9,15 @@ Swin Transformer-Tiny 학습 스크립트
 """
 
 import os
+import sys
 import json
 import argparse
 from pathlib import Path
+
+# triton-xpu (Intel Arc 용) 은 torch/_dynamo 가 기대하는 triton.language 등의
+# 서브 API 를 구현하지 않는다. 영구적으로 None 으로 마스킹해 ImportError 를
+# 유발함으로써 torch/_dynamo / IPEX 가 triton-free 경로로 동작하게 한다.
+sys.modules.setdefault("triton", None)  # type: ignore[arg-type]
 
 import torch
 import torch.nn as nn
@@ -29,10 +35,32 @@ try:
 except ImportError:
     WANDB_AVAILABLE = False
 
-try:
-    import intel_extension_for_pytorch as ipex  # Intel Arc XPU 지원
+def _ipex_version_ok() -> bool:
+    """IPEX major.minor 이 torch major.minor 와 일치하는지 사전 검증.
+    불일치 시 IPEX __init__.py 가 os._exit(127) 를 호출하므로 반드시 import 전에 확인."""
+    try:
+        from importlib.metadata import version as pkg_version
+        ipex_ver = pkg_version("intel-extension-for-pytorch")
+        torch_mm = ".".join(torch.__version__.split("+")[0].split(".")[:2])
+        ipex_mm  = ".".join(ipex_ver.split("+")[0].split(".")[:2])
+        if torch_mm != ipex_mm:
+            print(
+                f"[WARN] IPEX {ipex_ver} 는 torch {ipex_mm}.x 용이지만 "
+                f"torch {torch.__version__} 가 설치돼 있습니다. "
+                f"IPEX 를 건너뜁니다 (uv sync --extra arc 로 버전을 맞추세요)."
+            )
+            return False
+        return True
+    except Exception:
+        return False
 
-    IPEX_AVAILABLE = True
+
+try:
+    if _ipex_version_ok():
+        import intel_extension_for_pytorch as ipex  # Intel Arc XPU 지원
+        IPEX_AVAILABLE = True
+    else:
+        IPEX_AVAILABLE = False
 except Exception:
     IPEX_AVAILABLE = False
 
@@ -51,15 +79,15 @@ def detect_device(
     if device_str:
         return torch.device(device_str)
     if force_xpu:
-        if IPEX_AVAILABLE and torch.xpu.is_available():
+        if torch.xpu.is_available():
             return torch.device("xpu")
         raise RuntimeError(
             "--xpu 플래그를 지정했지만 Intel Arc XPU를 사용할 수 없습니다.\n"
-            "  1) intel-extension-for-pytorch 설치: uv sync --extra arc\n"
+            "  1) uv sync --extra arc 로 XPU 빌드 설치\n"
             "  2) Intel GPU 드라이버 설치 확인\n"
             "  3) docs/intel_arc_setup.md 참조"
         )
-    if IPEX_AVAILABLE and torch.xpu.is_available():
+    if torch.xpu.is_available():
         return torch.device("xpu")
     if torch.cuda.is_available():
         return torch.device("cuda")
@@ -347,10 +375,8 @@ def train(args):
             weight_decay=1e-4,
         )
         scheduler = CosineAnnealingLR(optimizer, T_max=args.phase1_epochs)
-        if _use_ipex:
-            # AMP 대상 연산 dtype: bf16 (Arc 권장), fp16 (Arc A-Series 학습용)
-            dtype = torch.bfloat16 if use_amp else torch.float32
-            model, optimizer = ipex.optimize(model, optimizer=optimizer, dtype=dtype)
+        # Phase 1은 head만 학습하므로 IPEX 최적화 없이 진행.
+        # ipex.optimize()는 Phase 2에서 전체 모델에 한 번만 호출한다.
 
         if ckpt is not None and resume_phase == 1 and resume_epoch > 0:
             optimizer.load_state_dict(ckpt["optimizer_state"])
@@ -440,6 +466,13 @@ def train(args):
 
     optimizer = optim.AdamW(model.parameters(), lr=args.phase2_lr, weight_decay=1e-4)
 
+    if _use_ipex:
+        # 스케줄러 생성 전에 최적화: 스케줄러가 IPEX 래핑된 optimizer를 참조하도록.
+        # 전체 파라미터가 언프리즈된 원본 모델에 한 번만 적용.
+        # bf16: Arc 권장(오버플로 없음), fp16: GradScaler 필요
+        dtype = torch.bfloat16 if use_amp else torch.float32
+        model, optimizer = ipex.optimize(model, optimizer=optimizer, dtype=dtype)
+
     # LR Warmup 설정: 2 epoch 동안 phase2_lr까지 점진적으로 증가
     warmup_epochs = 2
     warmup_scheduler = LinearLR(
@@ -455,10 +488,6 @@ def train(args):
         schedulers=[warmup_scheduler, main_scheduler],
         milestones=[warmup_epochs],
     )
-
-    if _use_ipex:
-        dtype = torch.bfloat16 if use_amp else torch.float32
-        model, optimizer = ipex.optimize(model, optimizer=optimizer, dtype=dtype)
 
     p2_start = 1
     if resume_phase == 2 and ckpt is not None:
@@ -624,6 +653,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--wandb", action="store_true", help="WandB 로깅 활성화")
     parser.add_argument("--wandb-project", default="holoscope")
+    parser.add_argument("--wandb-run", default=None, help="WandB 실행 이름 (미지정 시 자동)")
     parser.add_argument(
         "--accumulation-steps",
         type=int,

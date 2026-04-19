@@ -2,6 +2,7 @@
 
 import asyncio
 import re
+import sys
 from .base_job import BaseJob
 
 # "  Epoch  5/30 | train_loss: 0.4321  train_acc: 0.8765 | val_loss: 0.4123  val_acc: 0.8823"
@@ -46,7 +47,7 @@ class TrainJob(BaseJob):
         self.phase1_epochs = int(params.get("phase1_epochs", 5))
         self.phase2_epochs = int(params.get("phase2_epochs", 30))
 
-        cmd = ["uv", "run", "python", "train.py"]
+        cmd = [sys.executable, "train.py"]
         cmd += ["--data-dir",      params.get("data_dir", "./dataset/raw")]
         cmd += ["--save-dir",      params.get("save_dir", "./checkpoints")]
         cmd += ["--batch-size",    str(params.get("batch_size", 32))]

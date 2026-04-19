@@ -31,9 +31,13 @@ cd any-hoin
 # Create virtual environment and install dependencies (Python 3.11 automatically set)
 uv sync
 
-# (Optional) For Intel Arc GPU users
-uv sync --extra arc
+# (Optional) GPU backend — choose one that matches your hardware
+uv sync --extra cuda   # NVIDIA GPU
+uv sync --extra rocm   # AMD GPU
+uv sync --extra arc    # Intel Arc GPU (XPU)
 ```
+
+> **Intel Arc users**: After `uv sync --extra arc`, run scripts with `.venv/bin/python` or `uv run --extra arc python` instead of bare `uv run python`. Running without `--extra arc` can cause uv to reinstall the CUDA build of PyTorch and break XPU support.
 
 ### 3. Service Execution (All-in-One)
 
@@ -43,7 +47,7 @@ any-hoin consists of a backend API and a frontend UI.
 ```bash
 uv run python studio_api.py
 ```
-> Once the server is running, the API will be available at `http://localhost:8000`.
+> Once the server is running, the API will be available at `http://localhost:8001`.
 
 **Step B: Run Frontend UI**
 Open a new terminal and enter the following commands.

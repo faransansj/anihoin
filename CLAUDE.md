@@ -4,78 +4,124 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-HoloScope — Swin Transformer-Tiny 기반 홀로라이브 캐릭터 분류기. 학술/비상업 데모 프로젝트.
+HoloScope Studio — Swin Transformer-Tiny 기반 홀로라이브 캐릭터 분류기. 학술/비상업 데모 프로젝트.  
+End-to-end ML studio: **Crawl → Label → Train → Export → Inference**, all controllable via a React web UI.
 
 ## Setup
 
 ```bash
-uv sync                   # 가상환경 생성 + 의존성 설치 (Python 3.11)
-uv sync --extra logging   # wandb 포함 설치
+uv sync                     # Python 3.11 venv + dependencies
+uv sync --extra cuda        # NVIDIA GPU (PyPI CUDA build)
+uv sync --extra rocm        # AMD GPU (ROCm build)
+uv sync --extra arc         # Intel Arc XPU + IPEX
+uv sync --extra logging     # + wandb
 ```
 
-Optional: Copy `.env.example` to `.env` and set Danbooru credentials (reduces rate limits during crawling).
+GPU extras are mutually exclusive (enforced by `[tool.uv.conflicts]`).
 
-## Commands
+Optional: copy `.env.example` → `.env` and set `DANBOORU_LOGIN` / `DANBOORU_API_KEY`.
 
-### 1. Crawling
+## Running the Stack
+
+**Backend** (port 8001):
 ```bash
-uv run python danbooru_crawler.py
-uv run python danbooru_crawler.py -u USER -k KEY \
-  --min-images 500 --max-images 1000 \
+uv run python studio_api.py
+```
+
+**Frontend** (port 5173):
+```bash
+cd frontend && npm install && npm run dev
+```
+
+After `npm run build`, the backend serves `frontend/dist/` at `/` automatically.
+
+**Legacy inference-only server** (port 8000):
+```bash
+uv run python main.py
+```
+
+## CLI Commands
+
+**Crawl** (standalone):
+```bash
+uv run python crawling/danbooru_crawler.py \
+  -u USER -k KEY --min-images 500 --max-images 1000 \
   --workers 4 --output-dir ./dataset/raw
 ```
 
-### 2. Training
+**Train** (standalone):
 ```bash
 uv run python train.py \
-  --data-dir ./dataset/raw \
-  --save-dir ./checkpoints \
+  --data-dir ./dataset/raw --save-dir ./checkpoints \
   --batch-size 32 --phase1-epochs 5 --phase2-epochs 30 --phase2-lr 1e-5
 ```
 
-### 3. API Server
+**Full release pipeline**:
 ```bash
-uv run python main.py
-# → http://localhost:8000  /  http://localhost:8000/docs
+bash pipeline/run_pipeline.sh --version v2.0.0 [--skip-crawl] [--skip-train] [--release]
 ```
 
 ## Architecture
 
-The pipeline has three stages: **crawl → train → serve**.
+### Backend: `studio_api.py`
 
-### `danbooru_crawler.py`
-Fetches SFW images (rating:general,sensitive) from Danbooru for ~60 Hololive members. Characters below `--min-images` are moved to `dataset/raw/others/<char>/`. Auto-loads credentials from `.env` (`DANBOORU_LOGIN`, `DANBOORU_API_KEY`). API pages are fetched sequentially (0.5s sleep), then images are downloaded in parallel via `ThreadPoolExecutor`. Each image is validated with Pillow and deduplicated by MD5 within the session.
+FastAPI app on port 8001. Mounts all routers under `/api` and serves the built frontend from `frontend/dist/`.  
+Routers: `characters`, `crawl`, `labels`, `images`, `training`, `export`, `inference`.
 
-### `dataset.py`
-- `HoloDataset`: Reads `dataset/raw/` folder structure; folder name = class label. Performs reproducible train/val/test split (80/10/10) by seed. Supports `.jpg`, `.jpeg`, `.png`, `.webp`.
-- `build_dataloaders()`: Factory that returns all three DataLoaders. Uses `WeightedRandomSampler` to compensate for class imbalance.
-- Augmentation strategy: geometric transforms (flip, rotate, crop) with minimal color-shift (hue ±5°) to preserve character-distinguishing colors.
+### Job System: `studio/jobs/`
 
-### `train.py`
-Two-phase fine-tuning of `swin_tiny_patch4_window7_224` (ImageNet-1K pretrained, ~28M params):
-- **Phase 1** (default 5 epochs): Backbone frozen, only classification head trained (lr=1e-3).
-- **Phase 2** (default 30 epochs): Full model unfrozen, low lr (default 1e-5), CosineAnnealingLR.
-- Uses mixed-precision (AMP) and CrossEntropyLoss with label_smoothing=0.1.
-- Saves `checkpoints/best_model.pth` (best val_acc), `class_map.json` (idx→char), `config.json`.
+All long-running operations (crawl, train, export) share the same pattern:
 
-### `main.py`
-FastAPI inference server with:
-- `ModelLoader` singleton — loads model + class map once on startup.
-- `POST /predict` — accepts image upload, returns top-5 predictions with confidence scores.
-- `GET /classes` — lists all supported characters.
-- `GET /health` — device info.
-- Serves `demo/index.html` at root via `StaticFiles`.
+- **`BaseJob`** — spawns a subprocess, streams `stdout+stderr` line-by-line, broadcasts to WebSocket clients, buffers the last 500 log lines for reconnecting clients. State machine: `idle → running → done/failed`.
+- **`CrawlJob`** — wraps `crawling/danbooru_crawler.py`. Passes a `--tags-file` temp JSON for character tag overrides.
+- **`TrainJob`** — wraps `train.py`. Parses `_METRIC_RE` (epoch metrics) and `_PROGRESS_RE` (tqdm batch progress) from stdout; broadcasts structured `{type: "metric"|"progress", data: ...}` events alongside plain log lines.
+- **`Fp16Job` / `OnnxJob`** — wrap `quantize_fp16.py` / `export_onnx.py`.
 
-## Path Notes
+Each router (e.g. `studio/routers/training.py`) holds a **module-level singleton job instance** and exposes `GET /status`, `POST /start`, `POST /stop`, `GET /metrics`, and `WS /logs`.
 
-The README describes a subdirectory layout (`crawler/`, `train/`, `api/`, `demo/`) but all Python files currently reside at the project root. `main.py` has hardcoded relative paths (`../checkpoints`, `../demo`) that assume it runs from an `api/` subdirectory. Adjust these if running directly from root.
+### Character Registry: `studio/characters.py` + `characters.json`
 
-## Key Data Files (generated, not committed)
+`characters.json` is the source of truth for the character list:
+```json
+{"characters": [{"key": "folder_name", "tag": "danbooru_tag", "display_name": "Display Name"}]}
+```
+`key` = `dataset/raw/<key>/` folder name = training class label = inference output key.  
+`studio/characters.py` exposes `load() → dict[key, meta]` and `save()`.
+
+### Training: `train.py` + `dataset.py`
+
+Two-phase fine-tuning of `swin_tiny_patch4_window7_224` (~28M params, ImageNet-1K pretrained):
+- **Phase 1** (default 5 epochs): frozen backbone, head only, lr=1e-3.
+- **Phase 2** (default 30 epochs): full unfreeze, CosineAnnealingLR, lr=1e-5.
+- AMP + label smoothing 0.1 + early stopping (`--patience`).
+- Intel Arc XPU support via IPEX; `_ipex_version_ok()` guards against major.minor mismatch before import (mismatched IPEX calls `os._exit(127)`).
+- Outputs: `checkpoints/best_model.pth`, `class_map.json` (`{idx: char_key}`), `config.json`.
+
+`dataset.py`: `HoloDataset` does 80/10/10 reproducible split by seed; `build_dataloaders()` uses `WeightedRandomSampler` for class imbalance. Augmentation uses geometric transforms with minimal hue shift (±5°) to preserve character-distinguishing colors.
+
+### Frontend: `frontend/`
+
+React + TypeScript + Vite + Tailwind + Recharts + Zustand.
+
+- **`src/store/jobStore.ts`** — global Zustand store for job states (`crawlState`, `trainState`, `fp16State`, `onnxState`) and training metrics. Pages connect via WebSocket (`ws://localhost:8001/api/<job>/logs`) and push parsed events into this store.
+- **Pages**: `Crawl`, `Dataset`, `Training`, `Export`, `Inference` — each corresponds to one pipeline stage.
+- **`JobConsole`** component renders scrolling log output from the WebSocket stream.
+
+### Model Export & Inference
+
+- `export_onnx.py` — exports `best_model.pth` → `best_model.onnx`.
+- `quantize_fp16.py` — produces `best_model_fp16.pth`.
+- `studio/routers/inference.py` — lazy-loads `ModelLoader` from `main.py`; prefers ONNX session if available, falls back to PyTorch.
+
+## Key Generated Files (not committed)
 
 | Path | Description |
 |------|-------------|
-| `dataset/raw/<char>/` | Training images per character |
-| `dataset/raw/others/` | Sub-threshold characters |
-| `checkpoints/best_model.pth` | Trained model weights |
-| `checkpoints/class_map.json` | `{idx: char_name}` mapping |
+| `dataset/raw/<key>/` | Training images per character |
+| `dataset/raw/others/` | Characters below `--min-images` threshold |
+| `characters.json` | Character registry (edit via UI or directly) |
+| `checkpoints/best_model.pth` | Best val_acc weights |
+| `checkpoints/class_map.json` | `{idx: char_key}` for inference |
 | `checkpoints/config.json` | Training config + final metrics |
+| `checkpoints/best_model.onnx` | ONNX export |
+| `checkpoints/best_model_fp16.pth` | FP16 export |

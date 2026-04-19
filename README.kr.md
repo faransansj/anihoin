@@ -25,25 +25,29 @@ powershell -ExecutionPolicy ByPass -Command "irm https://astral.sh/uv/install.ps
 ### 2. 프로젝트 설정 및 의존성 설치
 ```bash
 # 저장소 클론 및 이동
-git clone https://github.com/faransansj/anihoin.git
-cd anihoin
+git clone https://github.com/faransansj/any-hoin.git
+cd any-hoin
 
 # 가상환경 생성 및 의존성 설치 (Python 3.11 자동 설정)
 uv sync
 
-# (옵션) Intel Arc GPU 사용자의 경우
-uv sync --extra arc
+# (옵션) GPU 백엔드 — 하드웨어에 맞는 것 하나만 선택
+uv sync --extra cuda   # NVIDIA GPU
+uv sync --extra rocm   # AMD GPU
+uv sync --extra arc    # Intel Arc GPU (XPU)
 ```
+
+> **Intel Arc 사용자**: `uv sync --extra arc` 후 스크립트 실행 시 `uv run python` 대신 `.venv/bin/python` 또는 `uv run --extra arc python`을 사용하세요. `--extra arc` 없이 실행하면 uv가 CUDA 빌드 PyTorch를 재설치하여 XPU 지원이 깨질 수 있습니다.
 
 ### 3. 서비스 실행 (All-in-One)
 
-HoloScope는 백엔드 API와 프론트엔드 UI로 구성되어 있습니다.
+any-hoin은 백엔드 API와 프론트엔드 UI로 구성되어 있습니다.
 
 **Step A: 백엔드 서버 실행**
 ```bash
 uv run python studio_api.py
 ```
-> 서버가 실행되면 `http://localhost:8000`에서 API가 작동합니다.
+> 서버가 실행되면 `http://localhost:8001`에서 API가 작동합니다.
 
 **Step B: 프론트엔드 UI 실행**
 새 터미널을 열고 아래 명령어를 입력하세요.

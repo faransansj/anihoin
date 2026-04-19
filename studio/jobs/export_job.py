@@ -1,6 +1,7 @@
 """ExportJob — quantize_fp16.py / export_onnx.py subprocess 래퍼."""
 
 import asyncio
+import sys
 from .base_job import BaseJob
 
 
@@ -12,7 +13,7 @@ class Fp16Job(BaseJob):
         if self.state == "running":
             return
         self.state = "running"
-        cmd = ["uv", "run", "python", "quantize_fp16.py"]
+        cmd = [sys.executable, "quantize_fp16.py"]
         self._task = asyncio.create_task(self._run(cmd, cwd=project_root))
 
 
@@ -24,5 +25,5 @@ class OnnxJob(BaseJob):
         if self.state == "running":
             return
         self.state = "running"
-        cmd = ["uv", "run", "python", "export_onnx.py", "--opset", str(opset)]
+        cmd = [sys.executable, "export_onnx.py", "--opset", str(opset)]
         self._task = asyncio.create_task(self._run(cmd, cwd=project_root))
