@@ -20,7 +20,7 @@ function RunningDot({ active }: { active: boolean }) {
 }
 
 export default function App() {
-  const { crawlState, trainState, fp16State, onnxState } = useJobStore();
+  const { crawlState, trainState, quantState, onnxState } = useJobStore();
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -49,7 +49,7 @@ export default function App() {
               <span>{label}</span>
               {label === "Crawl"   && <RunningDot active={crawlState === "running"} />}
               {label === "Train"   && <RunningDot active={trainState === "running"} />}
-              {label === "Export"  && <RunningDot active={fp16State === "running" || onnxState === "running"} />}
+              {label === "Export"  && <RunningDot active={quantState === "running" || onnxState === "running"} />}
             </NavLink>
           ))}
         </nav>

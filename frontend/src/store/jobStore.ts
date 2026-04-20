@@ -4,7 +4,7 @@ import type { JobState, TrainMetric, TrainProgress } from "../types";
 interface JobStore {
   crawlState:    JobState;
   trainState:    JobState;
-  fp16State:     JobState;
+  quantState:    JobState;
   onnxState:     JobState;
   trainMetrics:  TrainMetric[];
   bestValAcc:    number;
@@ -12,7 +12,7 @@ interface JobStore {
 
   setCrawlState:    (s: JobState) => void;
   setTrainState:    (s: JobState) => void;
-  setFp16State:     (s: JobState) => void;
+  setQuantState:    (s: JobState) => void;
   setOnnxState:     (s: JobState) => void;
   pushMetric:       (m: TrainMetric) => void;
   resetMetrics:     () => void;
@@ -22,7 +22,7 @@ interface JobStore {
 export const useJobStore = create<JobStore>((set) => ({
   crawlState:    "idle",
   trainState:    "idle",
-  fp16State:     "idle",
+  quantState:    "idle",
   onnxState:     "idle",
   trainMetrics:  [],
   bestValAcc:    0,
@@ -30,7 +30,7 @@ export const useJobStore = create<JobStore>((set) => ({
 
   setCrawlState:    (s) => set({ crawlState: s }),
   setTrainState:    (s) => set({ trainState: s }),
-  setFp16State:     (s) => set({ fp16State: s }),
+  setQuantState:    (s) => set({ quantState: s }),
   setOnnxState:     (s) => set({ onnxState: s }),
   pushMetric:       (m) => set((st) => ({
     trainMetrics: [...st.trainMetrics, m],
