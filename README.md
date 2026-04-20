@@ -2,122 +2,198 @@
 
 [한국어](README.kr.md) | [日本語](README.ja.md) | [中文](README.zh.md)
 
-any-hoin is an integrated platform based on Swin Transformer-Tiny for Hololive character classification, allowing the management of data collection (Crawling), model training (Training), and inference services (Inference) through a single integrated web UI.
+any-hoin is an end-to-end ML studio based on Swin Transformer-Tiny for Hololive character classification.  
+**Crawl → Label → Train → Export → Inference** — all controlled from a single React web UI.
 
-## 🚀 Quick Start
+---
 
-Follow these commands in order for any OS.
+## ⚡ Quick Start
 
-### 1. Environment Setup (Common)
-First, install `uv`, the latest Python package manager.
+### Prerequisites
 
-**macOS / Linux**
+| Tool | Mac/Linux | Windows |
+|------|-----------|---------|
+| Git | `brew install git` / package manager | [git-scm.com](https://git-scm.com/download/win) |
+| Node.js 18+ | `brew install node` / `nvm install --lts` | [nodejs.org](https://nodejs.org/) |
+| uv | see below | see below |
+
+> **Windows users**: Native PowerShell is supported for CPU/CUDA. For ROCm or Intel Arc (XPU), use **WSL2** — those PyTorch builds are Linux-only.
+
+---
+
+### Mac / Linux — One Shot
+
 ```bash
+# 1. Install uv (Python package manager)
 curl -LsSf https://astral.sh/uv/install.sh | sh
-source $HOME/.cargo/env
-```
+source $HOME/.cargo/env   # or restart terminal
 
-**Windows (PowerShell)**
-```powershell
-powershell -ExecutionPolicy ByPass -Command "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-### 2. Project Configuration & Dependency Installation
-```bash
-# Clone repository and move to directory
+# 2. Clone and enter the repo
 git clone https://github.com/faransansj/any-hoin.git
 cd any-hoin
 
-# Create virtual environment and install dependencies (Python 3.11 automatically set)
+# 3. Install Python dependencies (CPU / inference only)
 uv sync
 
-# (Optional) GPU backend — choose one that matches your hardware
+# 3a. (Optional) Pick ONE GPU backend — they are mutually exclusive
 uv sync --extra cuda   # NVIDIA GPU
-uv sync --extra rocm   # AMD GPU
-uv sync --extra arc    # Intel Arc GPU (XPU)
-```
+uv sync --extra rocm   # AMD GPU  (Linux only)
+uv sync --extra arc    # Intel Arc XPU (Linux only)
 
-> **Intel Arc users**: After `uv sync --extra arc`, run scripts with `.venv/bin/python` or `uv run --extra arc python` instead of bare `uv run python`. Running without `--extra arc` can cause uv to reinstall the CUDA build of PyTorch and break XPU support.
-
-### 3. Start (One-Shot)
-
-```bash
+# 4. One-shot start: backend + frontend
 ./start.sh
 ```
 
-This single command starts both the backend (`http://localhost:8001`) and frontend (`http://localhost:5173`). Press `Ctrl+C` to stop everything at once.
+`start.sh` opens:
+- Backend API → `http://localhost:8001`
+- Frontend UI → `http://localhost:5173`
 
-<details>
-<summary>Manual startup (if needed)</summary>
+Press `Ctrl+C` to stop both at once.
+
+---
+
+### Windows — One Shot (PowerShell)
+
+```powershell
+# 1. Install uv
+powershell -ExecutionPolicy ByPass -Command "irm https://astral.sh/uv/install.ps1 | iex"
+# Restart PowerShell after installation
+
+# 2. Clone and enter the repo
+git clone https://github.com/faransansj/any-hoin.git
+cd any-hoin
+
+# 3. Install Python dependencies (CPU / inference only)
+uv sync
+
+# 3a. (Optional) NVIDIA GPU only — ROCm/Arc require WSL2
+uv sync --extra cuda
+
+# 4. Install frontend dependencies
+npm install --prefix frontend
+
+# 5. Start backend (Terminal 1)
+.venv\Scripts\python studio_api.py
+
+# 5. Start frontend (Terminal 2 — open a new PowerShell window)
+npm run dev --prefix frontend
+```
+
+Frontend UI → `http://localhost:5173`  
+Backend API → `http://localhost:8001`
+
+> **Tip**: You can run both in the same terminal using PowerShell jobs, but two separate windows makes logs easier to read.
+
+---
+
+### Windows (WSL2) — One Shot
+
+WSL2 lets you use the same `start.sh` as Linux, and unlocks ROCm / Intel Arc support.
+
+```bash
+# Inside WSL2 terminal (Ubuntu recommended)
+
+# 1. Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source $HOME/.cargo/env
+
+# 2. Install Node.js (if not already)
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# 3. Clone and enter the repo
+git clone https://github.com/faransansj/any-hoin.git
+cd any-hoin
+
+# 4. Install dependencies
+uv sync                  # CPU
+uv sync --extra cuda     # NVIDIA (CUDA in WSL2)
+uv sync --extra rocm     # AMD GPU
+uv sync --extra arc      # Intel Arc XPU
+
+# 5. One-shot start
+./start.sh
+```
+
+---
+
+## 🔑 Danbooru API (Optional)
+
+Without credentials, anonymous rate limits and 2-tag search restrictions apply.
+
+```bash
+cp .env.example .env
+# Edit .env — set DANBOORU_LOGIN and DANBOORU_API_KEY
+# Get your key at: https://danbooru.donmai.us/profile
+```
+
+---
+
+## 🛠 Web UI Features
+
+| Page | Description |
+|------|-------------|
+| **Crawl** | Collect images for characters from Danbooru |
+| **Dataset** | Check and manage collected dataset status |
+| **Training** | Start training, monitor Loss/Accuracy in real-time |
+| **Export** | Export trained model (FP16 / INT8 / INT4 / ONNX) |
+| **Inference** | Upload images and classify characters instantly |
+
+---
+
+## 📂 Project Structure
+
+```text
+any-hoin/
+├── studio/                 # Backend system
+│   ├── jobs/               # Async job runners (crawl, train, export)
+│   └── routers/            # FastAPI route handlers
+├── frontend/               # React + TypeScript + Vite UI
+│   ├── src/pages/          # Crawl, Dataset, Training, Export, Inference
+│   └── src/store/          # Zustand job state
+├── crawling/               # Danbooru crawler
+├── train.py                # Two-phase Swin-T fine-tuning
+├── dataset.py              # Dataset split + augmentation
+├── export_onnx.py          # PyTorch → ONNX export
+├── quantize.py             # FP16 / INT8 / INT4 / INT2 quantization
+├── studio_api.py           # FastAPI entry point (port 8001)
+└── start.sh                # One-shot launcher (Mac/Linux/WSL2)
+```
+
+---
+
+## ⚙️ Manual Startup (if `start.sh` is unavailable)
 
 **Backend**
 ```bash
+# Mac/Linux/WSL2
 .venv/bin/python studio_api.py
+
+# Windows
+.venv\Scripts\python studio_api.py
 ```
 
 **Frontend** (new terminal)
 ```bash
 cd frontend && npm install && npm run dev
 ```
-</details>
 
 ---
 
-## 🛠 Integrated Web UI Key Features
+## 📊 Model
 
-You can now control all processes from the web UI without running individual scripts.
-
-- **🌐 Crawl Page**: Selectively collect images for characters from Danbooru.
-- **📚 Dataset Page**: Check and manage the status of collected datasets.
-- **🏋️ Training Page**: Start model training and monitor training metrics (Loss, Accuracy) in real-time via charts.
-- **🔮 Inference Page**: Upload images to classify characters and check metadata instantly.
-- **💾 Export Page**: Export trained models and configuration files.
-
----
-
-## 📂 Project Structure (Latest)
-
-```text
-any-hoin/
-├── studio/                 # Integrated Backend System
-│   ├── jobs/               # Asynchronous Task Processing (Crawling, Training, Export)
-│   │   ├── base_job.py     # Base Job Class
-│   │   ├── crawl_job.py    # Crawling Job Logic
-│   │   └── train_job.py    # Training Job Logic
-│   ├── routers/            # API Endpoints (FastAPI)
-│   │   ├── characters.py   # Character Metadata Management
-│   │   ├── crawl.py        # Crawling Control
-│   │   └── training.py     # Training Control
-│   └── characters.py       # Character Definitions & Data Models
-├── frontend/               # Web UI based on React + TypeScript + Vite
-│   ├── src/pages/          # Feature-specific Pages (Crawl, Training, Inference, etc.)
-│   └── src/store/          # Job State Management (Zustand)
-├── crawling/               # Core Crawling Engine (danbooru_crawler.py)
-├── train.py                # Model Training Core Engine
-├── dataset.py              # Dataset & Augmentation Pipeline
-└── studio_api.py           # Integrated API Server Entry Point
-```
-
----
-
-## ⚙️ Detailed Configuration
-
-### Danbooru Credentials Setup
-Setting up the `.env` file is recommended to avoid rate limits.
-```bash
-cp .env.example .env
-# Open .env and enter DANBOORU_LOGIN, DANBOORU_API_KEY
-```
-
-## 📊 Model Information
-- **Architecture**: Swin Transformer-Tiny
-- **Input Size**: 224 $\times$ 224 RGB
-- **Pretrained**: ImageNet-1K
-- **Key Feature**: Combines high data efficiency of the ViT family with global feature capture capabilities to achieve high classification accuracy even with small amounts of data.
+| Property | Value |
+|----------|-------|
+| Architecture | Swin Transformer-Tiny |
+| Input | 224 × 224 RGB |
+| Pretrained | ImageNet-1K |
+| Parameters | ~28M |
+| Training | Two-phase fine-tuning (frozen head → full unfreeze) |
 
 ---
 
 ## ⚠️ Notice
-- This project is a demo for academic and non-commercial purposes.
+
+- This project is a demo for academic and non-commercial purposes only.
 - All character copyrights belong to © Cover Corp.
-- Please comply with the Terms of Service of Danbooru when crawling.
+- Please comply with the [Danbooru Terms of Service](https://danbooru.donmai.us/terms_of_service) when crawling.

@@ -57,9 +57,11 @@ export interface JobStatus {
   state: JobState;
 }
 
+export type QuantFormat = "fp16" | "int8" | "int4" | "int2";
+
 export interface ExportStatus {
-  fp16: JobStatus;
-  onnx: JobStatus;
+  quant: JobStatus;
+  onnx:  JobStatus;
 }
 
 // ── 모델 정보 ───────────────────────────────────────────
@@ -72,5 +74,20 @@ export interface ModelEntry {
 export interface ModelMap {
   fp32: ModelEntry;
   fp16: ModelEntry;
+  int8: ModelEntry;
+  int4: ModelEntry;
+  int2: ModelEntry;
   onnx: ModelEntry;
+}
+
+export interface ModelsResponse {
+  models: ModelMap;
+  config_acc: number | null;
+}
+
+export interface QuantMetrics {
+  format: string;
+  fp32_mb: number;
+  out_mb: number;
+  ratio_pct: number;
 }
