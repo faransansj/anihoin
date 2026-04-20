@@ -76,12 +76,18 @@ export default function Crawl() {
     setSelected(next);
   }
 
+  // 태그 드롭다운 선택 시 빈 key/이름 자동 채우기
+  function handleTagSelect(tag: string) {
+    if (!newKey.trim())  setNewKey(tag);
+    if (!newName.trim()) setNewName(tag);
+  }
+
   // ── 캐릭터 추가 ─────────────────────────────────────────
   async function handleAdd() {
     setAddErr("");
-    const key  = newKey.trim().replace(/\s+/g, "_").toLowerCase();
     const tag  = newTag.trim();
-    const name = newName.trim() || key;
+    const key  = newKey.trim().replace(/\s+/g, "_").toLowerCase() || tag;
+    const name = newName.trim() || tag;
     if (!key) { setAddErr("Key를 입력하세요"); return; }
     if (!tag) { setAddErr("Danbooru 태그를 입력하세요"); return; }
     try {
@@ -194,6 +200,7 @@ export default function Crawl() {
                     value={newTag}
                     onChange={setNewTag}
                     onPostCount={setNewPostCount}
+                    onSelect={handleTagSelect}
                     placeholder="태그 입력 또는 검색..."
                   />
                   {newPostCount != null && (
