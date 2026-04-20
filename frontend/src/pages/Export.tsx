@@ -9,7 +9,7 @@ import { api } from "../api";
 import JobConsole from "../components/JobConsole";
 import StatusBadge from "../components/StatusBadge";
 import { useJobStore } from "../store/jobStore";
-import type { ExportStatus, ModelMap, QuantFormat } from "../types";
+import type { ExportStatus, ModelMap, ModelsResponse, QuantFormat } from "../types";
 
 const QUANT_OPTIONS: { value: QuantFormat; label: string; desc: string; color: string }[] = [
   { value: "fp16", label: "FP16", desc: "Float 16 — ~2× 압축, 정확도 무손실",      color: "text-yellow-300" },
@@ -22,14 +22,16 @@ const QUANT_KEYS: QuantFormat[] = ["fp16", "int8", "int4", "int2"];
 
 export default function Export() {
   const { quantState, onnxState, setQuantState, setOnnxState } = useJobStore();
-  const [models,   setModels]   = useState<ModelMap | null>(null);
-  const [format,   setFormat]   = useState<QuantFormat>("fp16");
-  const [opset,    setOpset]    = useState(18);
-  const [logTab,   setLogTab]   = useState<"quant" | "onnx">("quant");
+  const [models,    setModels]    = useState<ModelMap | null>(null);
+  const [configAcc, setConfigAcc] = useState<number | null>(null);
+  const [format,    setFormat]    = useState<QuantFormat>("fp16");
+  const [opset,     setOpset]     = useState(18);
+  const [logTab,    setLogTab]    = useState<"quant" | "onnx">("quant");
 
   async function loadModels() {
-    const r = await api.get<{ models: ModelMap }>("/export/models");
+    const r = await api.get<ModelsResponse>("/export/models");
     setModels(r.models);
+    setConfigAcc(r.config_acc ?? null);
   }
 
   useEffect(() => {
@@ -196,6 +198,7 @@ export default function Export() {
                 <th className="text-left pb-2">형식</th>
                 <th className="text-right pb-2">크기</th>
                 <th className="text-right pb-2">압축률</th>
+                <th className="text-right pb-2">정확도</th>
                 <th className="text-right pb-2"></th>
               </tr>
             </thead>
@@ -208,11 +211,22 @@ export default function Export() {
                   : 100;
                 const opt = QUANT_OPTIONS.find((o) => o.value === k);
                 const colorCls = opt?.color ?? "text-gray-300";
+
+                let accLabel: React.ReactNode = "—";
+                if (k === "fp32" && configAcc != null) {
+                  accLabel = <span className="text-green-400">{(configAcc * 100).toFixed(2)}%</span>;
+                } else if (k === "fp16" && configAcc != null) {
+                  accLabel = <span className="text-yellow-300">≈ {(configAcc * 100).toFixed(2)}%</span>;
+                } else if (k === "onnx" && configAcc != null) {
+                  accLabel = <span className="text-blue-300">≈ {(configAcc * 100).toFixed(2)}%</span>;
+                }
+
                 return (
                   <tr key={k} className="border-b border-gray-800">
                     <td className={`py-1.5 font-medium ${colorCls}`}>{k.toUpperCase()}</td>
                     <td className="text-right">{e.size_mb} MB</td>
                     <td className="text-right text-gray-500">{ratio}%</td>
+                    <td className="text-right">{accLabel}</td>
                     <td className="text-right">
                       <a
                         href={`/api/export/download/${e.filename}`}
@@ -227,6 +241,9 @@ export default function Export() {
               })}
             </tbody>
           </table>
+          {configAcc == null && (
+            <p className="mt-2 text-xs text-gray-600">정확도: 학습 완료 후 config.json에서 로드됩니다</p>
+          )}
         </div>
       )}
 

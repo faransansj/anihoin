@@ -1,5 +1,6 @@
 """모델 양자화 / ONNX export 라우터."""
 
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, WebSocket
@@ -33,12 +34,29 @@ def _entry(fname: str) -> dict:
 
 # ── 모델 목록 ─────────────────────────────────────────────
 
+def _load_config_acc() -> float | None:
+    p = CHECKPOINT_DIR / "config.json"
+    if not p.exists():
+        return None
+    try:
+        with open(p) as f:
+            cfg = json.load(f)
+        return cfg.get("test_acc")
+    except Exception:
+        return None
+
+
 @router.get("/models")
 def list_models():
     result = {"fp32": _entry("best_model.pth"), "onnx": _entry("best_model.onnx")}
     for fmt, fname in _QUANT_FILES.items():
         result[fmt] = _entry(fname)
-    return {"models": result}
+    return {"models": result, "config_acc": _load_config_acc()}
+
+
+@router.get("/metrics")
+def get_quant_metrics():
+    return {"metrics": _quant_job.metrics}
 
 
 # ── 양자화 ────────────────────────────────────────────────
