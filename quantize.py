@@ -49,10 +49,9 @@ def _build_model(num_classes: int) -> nn.Module:
 
 # ── FP16 ──────────────────────────────────────────────────
 
-def _quant_fp16(model: nn.Module) -> None:
-    """float16 state dict 저장 (기존 load_model()과 호환)."""
-    sd = {k: v.half() if v.is_floating_point() else v for k, v in model.state_dict().items()}
-    return {"format": "fp16", "state_dict": sd}
+def _quant_fp16(model: nn.Module) -> dict:
+    """float16 state dict — load_state_dict()와 직접 호환되는 plain state dict 반환."""
+    return {k: v.half() if v.is_floating_point() else v for k, v in model.state_dict().items()}
 
 
 # ── INT8 ──────────────────────────────────────────────────
@@ -158,6 +157,9 @@ def main():
     print(f"  {fmt.upper():<8} {out_mb:>8.1f} MB   {ratio:>7.1f}%")
     print(f"{'='*46}")
     print(f"\n저장 완료: {out_path}")
+
+    # 구조화 메트릭 — export_job.py 가 파싱
+    print(f"EXPORT_RESULT:{json.dumps({'format': fmt, 'fp32_mb': round(fp32_mb, 2), 'out_mb': round(out_mb, 2), 'ratio_pct': round(ratio, 1)})}")
 
 
 if __name__ == "__main__":

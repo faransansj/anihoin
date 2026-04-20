@@ -79,3 +79,15 @@ export interface ModelMap {
   int2: ModelEntry;
   onnx: ModelEntry;
 }
+
+export interface ModelsResponse {
+  models: ModelMap;
+  config_acc: number | null;
+}
+
+export interface QuantMetrics {
+  format: string;
+  fp32_mb: number;
+  out_mb: number;
+  ratio_pct: number;
+}
