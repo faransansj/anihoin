@@ -16,13 +16,14 @@ interface Props {
   value: string;
   onChange: (value: string) => void;
   onPostCount?: (count: number | null) => void;
+  onSelect?: (tag: string, postCount: number) => void;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
 }
 
 export default function TagSearchInput({
-  value, onChange, onPostCount, placeholder, disabled, className,
+  value, onChange, onPostCount, onSelect, placeholder, disabled, className,
 }: Props) {
   const [suggestions, setSuggestions] = useState<TagSuggestion[]>([]);
   const [loading,     setLoading]     = useState(false);
@@ -81,6 +82,7 @@ export default function TagSearchInput({
   function select(s: TagSuggestion) {
     onChange(s.name);
     onPostCount?.(s.post_count);
+    onSelect?.(s.name, s.post_count);
     setSuggestions([]);
     setOpen(false);
     setCursor(-1);
