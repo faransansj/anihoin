@@ -579,20 +579,9 @@ def train(args):
             name=args.wandb_run,
         )
 
-    # 얼굴 크롭 전처리 (--face-crop-dir 지정 시 해당 디렉토리를 학습 데이터로 사용)
-    effective_data_dir = args.data_dir
-    face_crop_dir = getattr(args, "face_crop_dir", "")
-    if face_crop_dir:
-        import os
-        if os.path.isdir(face_crop_dir):
-            effective_data_dir = face_crop_dir
-            print(f"[얼굴 크롭 데이터] {face_crop_dir} 를 학습 데이터로 사용합니다.")
-        else:
-            print(f"[경고] 얼굴 크롭 디렉토리를 찾을 수 없습니다: {face_crop_dir} — 원본 데이터 사용")
-
     # 데이터로더
     train_loader, val_loader, test_loader, train_ds = build_dataloaders(
-        root_dir=effective_data_dir,
+        root_dir=args.data_dir,
         img_size=args.img_size,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
@@ -939,8 +928,6 @@ if __name__ == "__main__":
     parser.add_argument("--wandb-run",     default=None, help="WandB 실행 이름 (미지정 시 자동)")
     parser.add_argument("--deep-validate-images", action="store_true",
                         help="학습 전 모든 이미지 헤더를 PIL로 검사합니다. 대형 데이터셋에서는 느릴 수 있습니다.")
-    parser.add_argument("--face-crop-dir", default="",
-                        help="얼굴 크롭 전처리된 데이터셋 경로. 지정 시 --data-dir 대신 사용.")
     parser.add_argument("--accumulation-steps", type=int, default=1,
                         help="Number of steps to accumulate gradients before updating")
     args = parser.parse_args()

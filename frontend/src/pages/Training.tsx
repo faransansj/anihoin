@@ -120,29 +120,6 @@ export default function Training() {
     () => currentNotificationPermission()
   );
 
-  // ── 얼굴 크롭 전처리 ─────────────────────────────────────
-  const [segState,     setSegState]     = useState<"idle"|"running"|"done"|"failed">("idle");
-  const [segPct,       setSegPct]       = useState(0);
-  const [segClass,     setSegClass]     = useState("");
-  const [segEta,       setSegEta]       = useState(-1);
-  const [segInputDir,  setSegInputDir]  = useState("./dataset/raw");
-  const [segOutputDir, setSegOutputDir] = useState("./dataset/raw_seg");
-  const [segBackend,   setSegBackend]   = useState<"cascade"|"yolo">("cascade");
-  const [useFaceCrop,  setUseFaceCrop]  = useState(false);
-  const [segLogOpen,   setSegLogOpen]   = useState(false);
-
-  useEffect(() => {
-    api.get<{ state: string; pct: number; current_class: string; eta_sec: number; output_dir: string }>(
-      "/segmentation/status"
-    ).then((r) => {
-      setSegState(r.state as "idle"|"running"|"done"|"failed");
-      setSegPct(r.pct ?? 0);
-      setSegClass(r.current_class ?? "");
-      setSegEta(r.eta_sec ?? -1);
-      if (r.output_dir) setSegOutputDir(r.output_dir);
-    }).catch(() => {});
-  }, []);
-
   useEffect(() => {
     api.get<TrainingStatus>("/training/status")
       .then((r) => {
@@ -192,21 +169,6 @@ export default function Training() {
     }
   }, [artifacts]);
 
-  async function startSeg() {
-    setSegPct(0);
-    setSegClass("");
-    await api.post("/segmentation/start", {
-      input_dir:   segInputDir,
-      output_dir:  segOutputDir,
-      backend:     segBackend,
-    });
-    setSegState("running");
-  }
-
-  async function stopSeg() {
-    await api.post("/segmentation/stop");
-  }
-
   async function startTraining() {
     resetMetrics();
     setNotificationPermission(await requestTrainingNotifications());
@@ -215,7 +177,6 @@ export default function Training() {
       phase1_epochs: phase1Epochs,
       phase2_epochs: phase2Epochs,
       phase2_lr:     parseFloat(phase2Lr),
-      face_crop_dir: useFaceCrop ? segOutputDir : "",
       patience,
       device,
       backbone,
@@ -568,117 +529,6 @@ export default function Training() {
           </div>
         </div>
       </div>
-
-       {/* ── 얼굴 크롭 전처리 ── */}
-       <div className="card space-y-3">
-         <button
-           className="flex items-center justify-between w-full text-left"
-           onClick={() => setSegLogOpen((v) => !v)}
-         >
-           <div className="flex items-center gap-2">
-             <p className="text-sm font-medium text-gray-200">{t("training.seg_title")}</p>
-             <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-               segState === "running" ? "bg-brand-900 text-brand-300" :
-               segState === "done"    ? "bg-green-900 text-green-300" :
-               segState === "failed"  ? "bg-red-900 text-red-300"     :
-               "bg-gray-800 text-gray-400"
-             }`}>
-               {t(`training.seg_status_${segState}`)}
-             </span>
-           </div>
-           <span className="text-gray-500 text-xs">{segLogOpen ? "▲" : "▼"}</span>
-         </button>
-
-         {segLogOpen && (
-           <div className="space-y-3 pt-1">
-             <p className="text-[11px] text-gray-500 leading-4">{t("training.seg_hint")}</p>
-
-             <div className="grid grid-cols-2 gap-2">
-               <div>
-                 <label className="label-text">{t("training.seg_input_dir")}</label>
-                 <input value={segInputDir}
-                   onChange={(e) => setSegInputDir(e.target.value)}
-                   className="input font-mono text-xs"
-                   disabled={segState === "running"}
-                 />
-               </div>
-               <div>
-                 <label className="label-text">{t("training.seg_output_dir")}</label>
-                 <input value={segOutputDir}
-                   onChange={(e) => setSegOutputDir(e.target.value)}
-                   className="input font-mono text-xs"
-                   disabled={segState === "running"}
-                 />
-               </div>
-             </div>
-
-             <div>
-               <label className="label-text">{t("training.seg_backend")}</label>
-               <select value={segBackend}
-                 onChange={(e) => setSegBackend(e.target.value as "cascade"|"yolo")}
-                 className="input"
-                 disabled={segState === "running"}
-               >
-                 <option value="cascade">{t("training.seg_backend_cascade")}</option>
-                 <option value="yolo">{t("training.seg_backend_yolo")}</option>
-               </select>
-             </div>
-
-             {/* 진행률 */}
-             {(segState === "running" || (segState === "done" && segPct > 0)) && (
-               <div className="space-y-1.5">
-                 <div className="flex justify-between text-xs text-gray-400">
-                   <span>{segClass || "처리 중..."}</span>
-                   <span className="tabular-nums">
-                     {segPct.toFixed(1)}%
-                     {segEta > 0 ? ` · ${fmtEta(segEta)}` : ""}
-                   </span>
-                 </div>
-                 <ProgressBar pct={segPct} color="bg-teal-500" />
-               </div>
-             )}
-
-             <div className="flex gap-2">
-               {segState !== "running" ? (
-                 <button onClick={startSeg} className="btn-primary flex-1">
-                   {t("training.seg_start_btn")}
-                 </button>
-               ) : (
-                 <button onClick={stopSeg} className="btn-danger flex-1">
-                   {t("training.seg_stop_btn")}
-                 </button>
-               )}
-             </div>
-
-             <JobConsole
-               title={t("training.seg_log_title")}
-               jobPath="/segmentation/logs"
-               onState={(s) => {
-                 setSegState(s as "idle"|"running"|"done"|"failed");
-               }}
-               onMessage={(msg) => {
-                 if (msg.type === "seg_progress") {
-                   const d = msg.data as { pct?: number; class?: string; eta_sec?: number };
-                   setSegPct(d.pct ?? 0);
-                   setSegClass(d.class ?? "");
-                   setSegEta(d.eta_sec ?? -1);
-                 }
-               }}
-             />
-           </div>
-         )}
-
-         {/* 크롭 데이터 학습 토글 */}
-         {(segState === "done") && (
-           <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer pt-1 border-t border-gray-800">
-             <input type="checkbox" checked={useFaceCrop}
-               onChange={(e) => setUseFaceCrop(e.target.checked)}
-               className="accent-teal-500" disabled={running} />
-             <span>{t("training.seg_use_cropped")}</span>
-             <span className="text-gray-600 font-mono text-[10px]">{segOutputDir}</span>
-           </label>
-         )}
-       </div>
 
        {/* ── 학습 로그 ── */}
        <div className="card">
