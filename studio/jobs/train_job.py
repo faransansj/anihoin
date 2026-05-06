@@ -6,6 +6,7 @@ import re
 import sys
 import time
 from fastapi import WebSocket
+import xpu_compat
 from .base_job import BaseJob
 
 # "  Epoch  5/30 | train_loss: 0.4321  train_acc: 0.8765 | val_loss: 0.4123  val_acc: 0.8823"
@@ -59,6 +60,10 @@ class TrainJob(BaseJob):
         cmd += ["--save-dir",      params.get("save_dir", "./checkpoints")]
         cmd += ["--backbone",      params.get("backbone", "swin_tiny_patch4_window7_224")]
         cmd += ["--batch-size",    str(params.get("batch_size", 32))]
+        cmd += ["--num-workers",   str(params.get("num_workers", -1))]
+        cache_dir = params.get("cache_dir", "./dataset/.cache")
+        if cache_dir:
+            cmd += ["--cache-dir", str(cache_dir)]
         cmd += ["--phase1-epochs", str(self.phase1_epochs)]
         cmd += ["--phase2-epochs", str(self.phase2_epochs)]
         cmd += ["--phase2-lr",     str(params.get("phase2_lr", 1e-5))]
@@ -74,8 +79,21 @@ class TrainJob(BaseJob):
             cmd += ["--initial-best-val-acc", str(initial_best)]
 
         device = params.get("device", "")
-        if device and device != "auto":
-            cmd += ["--device", device]
+        if device and device not in ("", "auto"):
+            # spawn 전 디바이스 가용성 검증 — 불가능한 디바이스를 전달하면 train.py가
+            # sys.exit(2)로 즉시 종료되므로, 여기서 미리 확인하고 auto로 폴백한다.
+            dev_type = device.split(":")[0]
+            if not xpu_compat.device_available(dev_type):
+                reason = xpu_compat.xpu_unavailable_message(f"--device {device}") \
+                    if dev_type == "xpu" else \
+                    f"--device {device} 를 사용할 수 없습니다."
+                print(
+                    f"[경고] {reason}\n"
+                    f"[경고] 자동으로 가용한 디바이스를 선택합니다."
+                )
+                device = ""
+            else:
+                cmd += ["--device", device]
         if mode == "fresh":
             cmd.append("--fresh")
         elif mode == "finetune":

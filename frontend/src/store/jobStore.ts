@@ -2,22 +2,24 @@ import { create } from "zustand";
 import type { JobState, TrainMetric, TrainProgress } from "../types";
 
 interface JobStore {
-  crawlState:    JobState;
-  trainState:    JobState;
-  quantState:    JobState;
-  onnxState:     JobState;
-  trainMetrics:  TrainMetric[];
-  bestValAcc:    number;
-  trainProgress: TrainProgress | null;
+  crawlState:      JobState;
+  trainState:      JobState;
+  quantState:      JobState;
+  onnxState:       JobState;
+  preprocessState: JobState;
+  trainMetrics:    TrainMetric[];
+  bestValAcc:      number;
+  trainProgress:   TrainProgress | null;
 
-  setCrawlState:    (s: JobState) => void;
-  setTrainState:    (s: JobState) => void;
-  setQuantState:    (s: JobState) => void;
-  setOnnxState:     (s: JobState) => void;
-  pushMetric:       (m: TrainMetric) => void;
-  setMetrics:       (metrics: TrainMetric[]) => void;
-  resetMetrics:     () => void;
-  setTrainProgress: (p: TrainProgress | null) => void;
+  setCrawlState:      (s: JobState) => void;
+  setTrainState:      (s: JobState) => void;
+  setQuantState:      (s: JobState) => void;
+  setOnnxState:       (s: JobState) => void;
+  setPreprocessState: (s: JobState) => void;
+  pushMetric:         (m: TrainMetric) => void;
+  setMetrics:         (metrics: TrainMetric[]) => void;
+  resetMetrics:       () => void;
+  setTrainProgress:   (p: TrainProgress | null) => void;
 }
 
 function metricKey(m: TrainMetric): string {
@@ -29,18 +31,20 @@ function bestAcc(metrics: TrainMetric[]): number {
 }
 
 export const useJobStore = create<JobStore>((set) => ({
-  crawlState:    "idle",
-  trainState:    "idle",
-  quantState:    "idle",
-  onnxState:     "idle",
-  trainMetrics:  [],
-  bestValAcc:    0,
-  trainProgress: null,
+  crawlState:      "idle",
+  trainState:      "idle",
+  quantState:      "idle",
+  onnxState:       "idle",
+  preprocessState: "idle",
+  trainMetrics:    [],
+  bestValAcc:      0,
+  trainProgress:   null,
 
-  setCrawlState:    (s) => set({ crawlState: s }),
-  setTrainState:    (s) => set({ trainState: s }),
-  setQuantState:    (s) => set({ quantState: s }),
-  setOnnxState:     (s) => set({ onnxState: s }),
+  setCrawlState:      (s) => set({ crawlState: s }),
+  setTrainState:      (s) => set({ trainState: s }),
+  setQuantState:      (s) => set({ quantState: s }),
+  setOnnxState:       (s) => set({ onnxState: s }),
+  setPreprocessState: (s) => set({ preprocessState: s }),
   pushMetric:       (m) => set((st) => {
     const next = st.trainMetrics.filter((metric) => metricKey(metric) !== metricKey(m));
     next.push(m);

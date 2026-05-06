@@ -10,6 +10,8 @@ import { useTranslation } from "react-i18next";
 import ImageModal from "../components/ImageModal";
 import { useJobStore } from "../store/jobStore";
 import type {
+  CachePreprocessStatus,
+  CacheStats,
   DatasetDiscovery,
   ImageItem,
   ImagePreprocessResult,
@@ -35,9 +37,11 @@ function formatDuration(sec: number | null): string {
   return `${minutes}분 ${seconds}초`;
 }
 
+const CACHE_TARGET_SIZES = [256, 320, 384, 512] as const;
+
 export default function Dataset() {
   const { t } = useTranslation();
-  const { crawlState, setCrawlState } = useJobStore();
+  const { crawlState, setCrawlState, preprocessState, setPreprocessState } = useJobStore();
   const [labels,       setLabels]       = useState<Label[]>([]);
   const [activeLabel,  setActiveLabel]  = useState<string | null>(null);
   const [images,       setImages]       = useState<ImageItem[]>([]);
@@ -67,6 +71,53 @@ export default function Dataset() {
   const lastPreprocessFinishedAt = useRef<number | null>(null);
   const preprocessLabel = preprocessScope === "active" ? activeLabel : null;
   const preprocessRunning = preprocessStatus?.state === "running";
+
+  // ── 학습 최적화 캐시 상태 ─────────────────────────────
+  const [cacheTargetSize, setCacheTargetSize] = useState(320);
+  const [cacheQuality,    setCacheQuality]    = useState(95);
+  const [cacheStats,      setCacheStats]      = useState<CacheStats | null>(null);
+  const [cacheStatus,     setCacheStatus]     = useState<CachePreprocessStatus | null>(null);
+  const [deletingCache,   setDeletingCache]   = useState(false);
+  const cacheRunning = cacheStatus?.state === "running" || preprocessState === "running";
+
+  // ── 학습 최적화 캐시 함수 ─────────────────────────────
+  const loadCacheStats = useCallback(async () => {
+    const r = await api.get<CacheStats>("/preprocess/cache-stats");
+    setCacheStats(r);
+  }, []);
+
+  const loadCacheStatus = useCallback(async () => {
+    const r = await api.get<CachePreprocessStatus>("/preprocess/status");
+    setCacheStatus(r);
+    setPreprocessState(r.state);
+    return r;
+  }, [setPreprocessState]);
+
+  async function startCachePreprocess() {
+    await api.post("/preprocess/start", {
+      target_size: cacheTargetSize,
+      quality: cacheQuality,
+    });
+    await loadCacheStatus();
+  }
+
+  async function stopCachePreprocess() {
+    await api.post("/preprocess/stop");
+    await loadCacheStatus();
+  }
+
+  async function deleteCache() {
+    if (!confirm(t("dataset.cache_delete_confirm"))) return;
+    setDeletingCache(true);
+    try {
+      await api.delete("/preprocess/cache");
+      await loadCacheStats();
+      setCacheStatus(null);
+      setPreprocessState("idle");
+    } finally {
+      setDeletingCache(false);
+    }
+  }
 
   // ── 라벨 목록 ──────────────────────────────────────────
   const loadLabels = useCallback(async () => {
@@ -128,7 +179,23 @@ export default function Dataset() {
   useEffect(() => {
     void loadLabels();
     void loadDatasetDiscovery();
-  }, [loadDatasetDiscovery, loadLabels]);
+    void loadCacheStats();
+    void loadCacheStatus();
+  }, [loadDatasetDiscovery, loadLabels, loadCacheStats, loadCacheStatus]);
+
+  useEffect(() => {
+    if (cacheStatus?.state !== "running") return;
+    const timer = setInterval(() => {
+      void loadCacheStatus().catch(console.error);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [loadCacheStatus, cacheStatus?.state]);
+
+  useEffect(() => {
+    if (cacheStatus?.state === "done" || cacheStatus?.state === "failed") {
+      void loadCacheStats();
+    }
+  }, [cacheStatus?.state, loadCacheStats]);
 
   useEffect(() => {
     void scanLargeImages();
@@ -634,6 +701,129 @@ export default function Dataset() {
               )}
             </div>
 
+            {/* ── 학습 최적화 캐시 전처리 ─────────────── */}
+            <div className="mx-4 mt-3 border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 shrink-0">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {t("dataset.cache_title")}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t("dataset.cache_desc")}
+                  </p>
+                </div>
+                {cacheStats && cacheStats.exists && (
+                  <div className="text-right text-xs text-green-400 shrink-0">
+                    <p className="font-semibold">
+                      {cacheStats.total_images.toLocaleString()}{t("dataset.total_images")} {t("dataset.cache_ready")}
+                    </p>
+                    <p className="text-gray-500">{formatBytes(cacheStats.total_bytes)}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2 items-end">
+                <label className="space-y-1">
+                  <span className="label-text">{t("dataset.cache_target_size")}</span>
+                  <div className="flex gap-1">
+                    {CACHE_TARGET_SIZES.map((sz) => (
+                      <button
+                        key={sz}
+                        onClick={() => setCacheTargetSize(sz)}
+                        disabled={cacheRunning}
+                        className={`flex-1 text-xs py-1 rounded border transition-colors ${
+                          cacheTargetSize === sz
+                            ? "bg-brand-600 border-brand-500 text-white"
+                            : "border-gray-700 text-gray-400 hover:border-gray-500 disabled:opacity-40"
+                        }`}
+                      >
+                        {sz}
+                      </button>
+                    ))}
+                  </div>
+                </label>
+                <label className="space-y-1">
+                  <span className="label-text">{t("dataset.cache_quality")}</span>
+                  <input
+                    type="number"
+                    min={70}
+                    max={100}
+                    value={cacheQuality}
+                    onChange={(e) => setCacheQuality(Number(e.target.value))}
+                    disabled={cacheRunning}
+                    className="input text-xs py-1"
+                  />
+                </label>
+                <div className="flex gap-2 lg:col-span-2 items-end">
+                  <button
+                    onClick={startCachePreprocess}
+                    disabled={cacheRunning}
+                    className="btn-primary text-xs py-1 flex-1 disabled:opacity-50"
+                  >
+                    {cacheRunning
+                      ? `${cacheStatus?.pct ?? 0}%`
+                      : t("dataset.cache_start_btn")}
+                  </button>
+                  {cacheRunning && (
+                    <button
+                      onClick={stopCachePreprocess}
+                      className="btn-danger text-xs py-1 px-3"
+                    >
+                      {t("dataset.cache_stop_btn")}
+                    </button>
+                  )}
+                  {!cacheRunning && cacheStats?.exists && (
+                    <button
+                      onClick={deleteCache}
+                      disabled={deletingCache}
+                      className="btn-ghost text-xs py-1 px-3 text-red-400 hover:text-red-300 disabled:opacity-40"
+                    >
+                      {deletingCache ? "..." : t("dataset.cache_delete_btn")}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {cacheStatus && cacheStatus.state !== "idle" && (
+                <div className="mt-3 rounded border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950/60 p-3">
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <span className={`font-semibold ${
+                      cacheStatus.state === "failed" ? "text-red-300"
+                      : cacheStatus.state === "done"  ? "text-green-300"
+                      : "text-brand-300"
+                    }`}>
+                      {cacheStatus.state === "running" ? t("dataset.cache_running")
+                       : cacheStatus.state === "done"  ? t("dataset.cache_done")
+                       : t("dataset.cache_failed")}
+                    </span>
+                    <span className="text-gray-500">
+                      {cacheStatus.done.toLocaleString()} / {cacheStatus.total.toLocaleString()}{t("dataset.total_images")} · {cacheStatus.pct.toFixed(1)}%
+                    </span>
+                  </div>
+
+                  <div className="mt-2 h-1.5 overflow-hidden rounded bg-gray-200 dark:bg-gray-800">
+                    <div
+                      className={`h-full transition-all ${
+                        cacheStatus.state === "failed" ? "bg-red-500" : "bg-brand-500"
+                      }`}
+                      style={{ width: `${Math.min(100, Math.max(0, cacheStatus.pct))}%` }}
+                    />
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+                    <span>{t("dataset.cache_stat_cached")} {cacheStatus.cached.toLocaleString()}</span>
+                    <span>{t("dataset.cache_stat_skipped")} {cacheStatus.skipped.toLocaleString()}</span>
+                    <span>{t("dataset.cache_stat_elapsed")} {cacheStatus.elapsed_sec?.toFixed(1) ?? "-"}s</span>
+                  </div>
+                </div>
+              )}
+
+              {!cacheStats?.exists && !cacheRunning && (
+                <p className="mt-2 text-[11px] text-gray-600 dark:text-gray-500">
+                  {t("dataset.cache_not_built")}
+                </p>
+              )}
+            </div>
 
         {/* 그리드 */}
         <div className="flex-1 overflow-y-auto p-4">

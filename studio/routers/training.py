@@ -1,6 +1,7 @@
 """학습 라우터 — TrainJob 관리 + 메트릭 조회."""
 
 import json
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, WebSocket
@@ -53,10 +54,13 @@ def _device_status() -> dict:
         {"key": "cpu", "label": "CPU", "available": True, "reason": None},
     ]
 
+    cpu_count = os.cpu_count() or 4
     return {
         "torch_version": torch_version,
         "ipex_version": xpu_compat.ipex_version(),
         "devices": devices,
+        "cpu_count": cpu_count,
+        "recommended_workers": max(1, min(8, cpu_count // 2)),
     }
 
 

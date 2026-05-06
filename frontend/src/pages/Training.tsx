@@ -74,12 +74,14 @@ async function requestTrainingNotifications(): Promise<NotificationStatus> {
 
 // ── 컴포넌트 ─────────────────────────────────────────────
 
+// API 응답 전에는 가속 디바이스를 사용 불가로 표시해 레이스 컨디션을 방지한다.
+// auto / cpu는 항상 안전하므로 활성화 상태 유지.
 const DEFAULT_DEVICE_OPTIONS: DeviceOption[] = [
-  { key: "auto", label: "auto", available: true, reason: null },
-  { key: "cuda", label: "CUDA", available: true, reason: null },
-  { key: "mps", label: "MPS (Apple)", available: true, reason: null },
-  { key: "xpu", label: "XPU (Intel Arc)", available: true, reason: null },
-  { key: "cpu", label: "CPU", available: true, reason: null },
+  { key: "auto", label: "auto", available: true,  reason: null },
+  { key: "cuda", label: "CUDA", available: false, reason: "확인 중..." },
+  { key: "mps",  label: "MPS (Apple)",     available: false, reason: "확인 중..." },
+  { key: "xpu",  label: "XPU (Intel Arc)", available: false, reason: "확인 중..." },
+  { key: "cpu",  label: "CPU",  available: true,  reason: null },
 ];
 
 export default function Training() {
@@ -91,6 +93,13 @@ export default function Training() {
   } = useJobStore();
 
   const [batchSize,       setBatchSize]       = useState(32);
+  const [numWorkers,         setNumWorkers]         = useState(
+    () => {
+      const stored = localStorage.getItem("training.num_workers");
+      return stored !== null ? Number(stored) : -1;  // -1 = 권장값 대기
+    }
+  );
+  const [recommendedWorkers, setRecommendedWorkers] = useState(4);
   const [phase1Epochs,    setPhase1Epochs]    = useState(5);
   const [phase2Epochs,    setPhase2Epochs]    = useState(30);
   const [phase2Lr,        setPhase2Lr]        = useState("1e-5");
@@ -141,6 +150,9 @@ export default function Training() {
           const selected = r.devices.find((item) => item.key === prev);
           return selected?.available ? prev : "auto";
         });
+        const rec = r.recommended_workers ?? 4;
+        setRecommendedWorkers(rec);
+        setNumWorkers((prev) => (prev === -1 ? rec : prev));
       })
       .catch(console.error);
 
@@ -172,8 +184,10 @@ export default function Training() {
   async function startTraining() {
     resetMetrics();
     setNotificationPermission(await requestTrainingNotifications());
+    const effectiveWorkers = numWorkers < 0 ? recommendedWorkers : numWorkers;
     await api.post("/training/start", {
       batch_size:    batchSize,
+      num_workers:   effectiveWorkers,
       phase1_epochs: phase1Epochs,
       phase2_epochs: phase2Epochs,
       phase2_lr:     parseFloat(phase2Lr),
@@ -288,12 +302,31 @@ export default function Training() {
                  className="input" disabled={running} />
              </div>
              <div>
-               <label className="label-text">{t("training.patience")}</label>
-               <input type="number" value={patience} min={0}
-                 onChange={(e) => setPatience(+e.target.value)}
-                 className="input" disabled={running} />
+               <label className="label-text">{t("training.num_workers")}</label>
+               <input
+                 type="number"
+                 value={numWorkers < 0 ? recommendedWorkers : numWorkers}
+                 min={0}
+                 onChange={(e) => {
+                   const value = Math.max(0, +e.target.value || 0);
+                   setNumWorkers(value);
+                   localStorage.setItem("training.num_workers", String(value));
+                 }}
+                 className="input"
+                 disabled={running}
+               />
+               <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-500">
+                 {t("training.num_workers_hint", { recommended: recommendedWorkers })}
+               </p>
              </div>
 
+          </div>
+
+          <div>
+            <label className="label-text">{t("training.patience")}</label>
+            <input type="number" value={patience} min={0}
+              onChange={(e) => setPatience(+e.target.value)}
+              className="input" disabled={running} />
           </div>
 
            <div>

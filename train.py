@@ -587,6 +587,7 @@ def train(args):
         num_workers=args.num_workers,
         device_type=device.type,
         deep_validate_images=getattr(args, "deep_validate_images", False),
+        cache_dir=getattr(args, "cache_dir", None) or None,
     )
 
     num_classes = len(train_ds.classes)
@@ -896,7 +897,10 @@ if __name__ == "__main__":
     parser.add_argument("--backbone",  default=DEFAULT_BACKBONE, help="timm 백본 모델명")
     parser.add_argument("--img-size",  type=int, default=224)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--num-workers", type=int, default=4)
+    parser.add_argument("--num-workers", type=int, default=-1,
+                        help="DataLoader 워커 수. -1=CPU 수 기반 자동 (기본)")
+    parser.add_argument("--cache-dir", default="",
+                        help="학습 최적화 캐시 디렉토리 (비워두면 원본 사용)")
     parser.add_argument("--phase1-epochs", type=int, default=5)
     parser.add_argument("--phase2-epochs", type=int, default=30)
     parser.add_argument("--phase2-lr",  type=float, default=1e-5)

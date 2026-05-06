@@ -231,9 +231,32 @@ export interface DeviceOption {
 }
 
 export interface TrainingDevicesResponse {
-  torch_version: string;
-  ipex_version:  string | null;
-  devices:       DeviceOption[];
+  torch_version:      string;
+  ipex_version:       string | null;
+  devices:            DeviceOption[];
+  cpu_count:          number;
+  recommended_workers: number;
+}
+
+// ── 학습 최적화 캐시 전처리 ──────────────────────────────
+
+export interface CachePreprocessStatus {
+  name:        string;
+  state:       JobState;
+  total:       number;
+  done:        number;
+  cached:      number;
+  skipped:     number;
+  errors:      number;
+  pct:         number;
+  elapsed_sec: number | null;
+}
+
+export interface CacheStats {
+  exists:       boolean;
+  total_images: number;
+  total_bytes:  number;
+  classes:      number;
 }
 
 export type TrainingMode = "fresh" | "resume" | "finetune";

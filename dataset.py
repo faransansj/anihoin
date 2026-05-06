@@ -13,6 +13,8 @@ from functools import lru_cache
 from pathlib import Path
 from PIL import Image, UnidentifiedImageError
 
+_DEFAULT_NUM_WORKERS = max(1, min(8, (os.cpu_count() or 4) // 2))
+
 import xpu_compat
 import torch
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
@@ -78,14 +80,22 @@ def load_rgb_image_array(path: str | Path) -> np.ndarray:
         return np.array(image.convert("RGB"))
 
 
+def _cache_path(src: str, root_dir: Path, cache_dir: Path) -> Path:
+    p = Path(src)
+    rel = p.relative_to(root_dir)
+    return cache_dir / rel.parent / (p.stem + ".jpg")
+
+
 def _collect_samples_by_class(
     root_dir: str | Path,
     *,
     validate_images: bool = True,
     deep_validate_images: bool = False,
     validation_workers: int | None = None,
+    cache_dir: str | Path | None = None,
 ) -> tuple[dict[str, list[str]], list[tuple[str, str]]]:
     root_dir = Path(root_dir)
+    cache_dir_path: Path | None = Path(cache_dir) if cache_dir else None
     top_dirs = sorted(
         d for d in root_dir.iterdir()
         if d.is_dir() and not d.name.startswith(".")
@@ -125,6 +135,7 @@ def _collect_samples_by_class(
 
     sample_paths_by_class: dict[str, list[str]] = {}
     skipped_files: list[tuple[str, str]] = []
+    cache_hits = 0
     for cls, paths in candidate_paths_by_class.items():
         cls_samples = []
         for path in paths:
@@ -132,9 +143,22 @@ def _collect_samples_by_class(
             if not valid:
                 skipped_files.append((path, reason))
                 continue
+            if cache_dir_path is not None:
+                try:
+                    cached = _cache_path(path, root_dir, cache_dir_path)
+                    if cached.exists() and cached.stat().st_mtime >= Path(path).stat().st_mtime:
+                        cls_samples.append(str(cached))
+                        cache_hits += 1
+                        continue
+                except OSError:
+                    pass
             cls_samples.append(path)
         if cls_samples:
             sample_paths_by_class[cls] = cls_samples
+
+    if cache_dir_path is not None:
+        total = sum(len(v) for v in sample_paths_by_class.values())
+        print(f"[캐시] {cache_hits}/{total}장 캐시 히트 (cache_dir={cache_dir_path})")
 
     return sample_paths_by_class, skipped_files
 
@@ -359,17 +383,34 @@ def build_dataloaders(
     root_dir: str | Path,
     img_size: int = 224,
     batch_size: int = 32,
-    num_workers: int = 4,
+    num_workers: int = -1,
     use_weighted_sampler: bool = True,
     device_type: str = "cpu",
     validate_images: bool = True,
     deep_validate_images: bool = False,
+    cache_dir: str | Path | None = None,
 ):
-    """train/val/test DataLoader 한번에 생성"""
+    """train/val/test DataLoader 한번에 생성.
+
+    num_workers=-1 이면 CPU 수 기반 자동 산정.
+    cache_dir 지정 시 mtime이 소스보다 최신인 캐시 이미지를 우선 로드.
+    """
+    if num_workers < 0:
+        num_workers = _DEFAULT_NUM_WORKERS
+
+    resolved_cache: Path | None = None
+    if cache_dir:
+        p = Path(cache_dir)
+        if p.exists():
+            resolved_cache = p
+        else:
+            print(f"[DataLoader] cache_dir={cache_dir} 가 없어 원본 이미지를 사용합니다.")
+
     sample_paths_by_class, skipped_files = _collect_samples_by_class(
         root_dir,
         validate_images=validate_images,
         deep_validate_images=deep_validate_images,
+        cache_dir=resolved_cache,
     )
     if validate_images:
         report_integrity_skips(skipped_files)
@@ -424,13 +465,16 @@ def build_dataloaders(
     }
     if worker_count > 0:
         loader_kwargs["timeout"] = 120
+        loader_kwargs["persistent_workers"] = True
+        loader_kwargs["prefetch_factor"] = 4
     if worker_count > 0 and device_type == "xpu":
         loader_kwargs["multiprocessing_context"] = "spawn"
 
     mp_ctx = loader_kwargs.get("multiprocessing_context", "default")
     print(
         f"[DataLoader] device={device_type} num_workers={worker_count} "
-        f"pin_memory={pin} mp_context={mp_ctx}"
+        f"pin_memory={pin} mp_context={mp_ctx} "
+        f"persistent_workers={loader_kwargs.get('persistent_workers', False)}"
     )
 
     train_loader = DataLoader(
